@@ -503,7 +503,7 @@ git config user.name "Acd212"
 git config user.email "349978655+Acd212@users.noreply.github.com"
 ```
 
-- CI: `.github/workflows/build.yml`; última ejecución verde `44822379426`.
+- CI: `.github/workflows/build.yml`; última ejecución verde `44829115895`.
 - Artefactos del run: `convertall-linux` (.AppImage) y `convertall-windows` (.exe NSIS).
 - El instalador incluye `licenses/` (FFmpeg y Pandoc) además de `tools/`.
 - Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.1` (MSI, NSIS, DEB, AppImage y checksums).

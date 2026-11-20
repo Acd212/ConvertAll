@@ -22,7 +22,7 @@ Verificado en Linux y Windows:
 - 12 pruebas Rust correctas.
 - 77 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
 - 4 archivos convertidos desde la GUI (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
-- Instaladores de Windows generados: MSI de 132 MB y NSIS de 92 MB con FFmpeg, Pandoc e ImageMagick incluidos.
+- Instalador NSIS de Windows (93 MB) con FFmpeg, Pandoc e ImageMagick incluidos.
 - Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
 - La app arranca y detecta FFmpeg, ImageMagick, libvips y Pandoc.
 
@@ -42,7 +42,7 @@ La release 0.1.1 conserva además el `.msi` y el `.deb`, pero **no se incluirán
 
 La v0.1.1 corrige el sondeo de ImageMagick en Windows, que dejaba la lista de formatos de imagen vacía. Es la versión recomendada.
 
-El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips y Pandoc) sí siguen siendo del sistema, igual que en el `.deb`.
+El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips y Pandoc) sí siguen siendo del sistema.
 
 ## Requisitos de desarrollo
 
@@ -104,7 +104,7 @@ El repositorio incluye `.github/workflows/build.yml`. En cada push a `main`:
 
 1. Se descargan FFmpeg, Pandoc e ImageMagick portables.
 2. Se compila la app en `windows-latest`.
-3. Se publican `.msi`/`.exe` como artefactos.
+3. Se publica el `.exe` (NSIS) como artefacto.
 
 Los binarios descargados no se versionan: `src-tauri/resources/windows/` está en `.gitignore`.
 

@@ -32,6 +32,14 @@
     pandocMissing?: boolean;
     onPickOutput: () => void;
   } = $props();
+
+  function isOptional(engine: EngineInfo): boolean {
+    return (
+      engine.id === "vips" &&
+      !engine.available &&
+      engines.some((item) => item.id === "magick" && item.available)
+    );
+  }
 </script>
 
 <aside class="space-y-3">
@@ -159,17 +167,29 @@
         <div class="flex items-center justify-between gap-2">
           <span class="flex items-center gap-2 text-[11px] text-ink">
             <span
-              class="h-1.5 w-1.5 rounded-full"
-              class:bg-success={engine.available}
-              class:bg-danger={!engine.available}
+              class={`h-1.5 w-1.5 rounded-full ${
+                engine.available
+                  ? "bg-success"
+                  : isOptional(engine)
+                    ? "bg-muted/40"
+                    : "bg-danger"
+              }`}
             ></span>
             {engine.name}
           </span>
           <span
             class="max-w-[150px] truncate text-[10px] text-muted"
-            title={engine.version ?? engine.path ?? ""}
+            title={engine.available
+              ? (engine.version ?? engine.path ?? "")
+              : isOptional(engine)
+                ? "Opcional: ImageMagick está disponible"
+                : "No disponible"}
           >
-            {engine.available ? (engine.version ?? "Disponible") : "No disponible"}
+            {engine.available
+              ? (engine.version ?? "Disponible")
+              : isOptional(engine)
+                ? "No necesario"
+                : "No disponible"}
           </span>
         </div>
       {/each}
@@ -179,8 +199,11 @@
       <div class="mt-3 flex gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2.5 text-[10px] leading-relaxed text-ink">
         <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-500" strokeWidth={2} />
         <span>
-          Pandoc no está instalado. En Linux ejecuta
-          <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">./scripts/fetch-pandoc-linux.sh</code>.
+          Pandoc no está instalado. Instálalo con el gestor de paquetes de tu
+          distribución (por ejemplo,
+          <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">sudo apt install pandoc</code>
+          o
+          <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">sudo pacman -S pandoc</code>).
           En Windows viene incluido en el instalador.
         </span>
       </div>

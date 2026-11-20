@@ -36,7 +36,9 @@ Pendiente:
 Los instaladores de **v0.1.0** están en [Releases](https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0):
 
 - Windows: `.msi` y `.exe` con todos los motores incluidos.
-- Linux: `.deb` (usa los motores del sistema).
+- Linux: `.deb` y `.AppImage`.
+
+El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips y Pandoc) sí siguen siendo del sistema, igual que en el `.deb`.
 
 ## Requisitos de desarrollo
 

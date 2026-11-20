@@ -339,7 +339,7 @@ La carpeta de ImageMagick se mapea como **directorio**, no como glob. Tauri apla
 
 El workflow `.github/workflows/build.yml`:
 
-- Linux: `ubuntu-24.04`, `bunx tauri build --bundles deb`.
+- Linux: `ubuntu-24.04`, `bunx tauri build --bundles deb,appimage`.
 - Windows: `windows-latest`, descarga motores, `bunx tauri build --ci`, sube `.msi`/`.exe`.
 
 `engines.rs` busca primero `CONVERTALL_TOOLS_DIR`, luego `resource_dir()/tools`, luego `PATH`. Para ImageMagick portable define `MAGICK_HOME` y añade su carpeta al `PATH`.
@@ -366,6 +366,15 @@ Los binarios de Windows se probaron bajo Wine:
 - `ImageMagick 7.1.2-36 Q16 x64`.
 - 13/13 conversiones correctas (JPG, ICO, WebP, AVIF, HEIC, JXL, MP3, FLAC, MKV, WebM, GIF, DOCX, HTML).
 
+### Linux: deb + AppImage
+
+El CI compila `--bundles deb,appimage`:
+
+- `.deb` (~1,9 MB): binario + escritorio + iconos; motores del sistema.
+- `.AppImage` (~108 MB): incluye WebKit2GTK 4.1, GTK3, libsoup y los procesos WebKit, por lo que no hace falta instalar WebKit en el sistema. Los motores siguen siendo del sistema.
+
+El AppImage se probó bajo Xvfb y abre la cola correctamente con archivos pasados por CLI.
+
 ---
 
 ## 11. Estado actual
@@ -390,8 +399,9 @@ Implementado y verificado:
 - [x] Repo privado creado y primer push: `Acd212/ConvertAll`.
 - [x] CI Linux + Windows verde (run 44811808230).
 - [x] Instaladores de Windows con motores y licencias incluidas; 13/13 conversiones bajo Wine.
+- [x] AppImage de Linux con WebKit2GTK 4.1 incluido; probado bajo Xvfb.
 - [x] Cola probada de extremo a extremo desde la GUI: 4/4 archivos convertidos.
-- [x] Release privada `v0.1.0` con MSI, NSIS, DEB y `SHA256SUMS.txt`.
+- [x] Release privada `v0.1.0` con MSI, NSIS, DEB, AppImage y `SHA256SUMS.txt`.
 
 Resultados de la última ejecución (2026-11-20):
 
@@ -487,9 +497,10 @@ git config user.name "Acd212"
 git config user.email "349978655+Acd212@users.noreply.github.com"
 ```
 
-- CI: `.github/workflows/build.yml`; última ejecución verde `44811808230`.
-- Artefactos del run: `convertall-linux` (.deb) y `convertall-windows` (.msi + .exe).
+- CI: `.github/workflows/build.yml`; última ejecución verde `44818064655`.
+- Artefactos del run: `convertall-linux` (.deb + .AppImage) y `convertall-windows` (.msi + .exe).
 - El instalador incluye `licenses/` (FFmpeg y Pandoc) además de `tools/`.
-- Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0` (MSI, NSIS, DEB y checksums).
+- Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0` (MSI, NSIS, DEB, AppImage y checksums).
+- El AppImage incluye WebKit2GTK 4.1/GTK3; no requiere instalar WebKit. Los motores siguen siendo del sistema.
 
 No hay secretos dentro del proyecto. La autenticación de GitHub vive fuera del repo.

@@ -32,6 +32,7 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
+            libfuse2t64 \
             patchelf
 
       - name: Instalar dependencias JS
@@ -45,14 +46,16 @@ jobs:
           CARGO_TARGET_DIR: ${{ github.workspace }}/cache/cargo-target
 
       - name: Compilar
-        run: bunx tauri build --bundles deb
+        run: bunx tauri build --bundles deb,appimage
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/cache/cargo-target
 
       - uses: actions/upload-artifact@v4
         with:
           name: convertall-linux
-          path: cache/cargo-target/release/bundle/deb/*.deb
+          path: |
+            cache/cargo-target/release/bundle/deb/*.deb
+            cache/cargo-target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
   windows:

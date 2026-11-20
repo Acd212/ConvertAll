@@ -388,9 +388,10 @@ Implementado y verificado:
 - [x] La app arranca en Xvfb y muestra los cuatro motores en verde.
 - [x] Conversiones reales: 77/77 correctas con `scripts/test-conversions.sh`.
 - [x] Repo privado creado y primer push: `Acd212/ConvertAll`.
-- [x] CI Linux + Windows verde (run 44804003751).
-- [x] Instaladores de Windows con motores incluidos; 13/13 conversiones bajo Wine.
+- [x] CI Linux + Windows verde (run 44811808230).
+- [x] Instaladores de Windows con motores y licencias incluidas; 13/13 conversiones bajo Wine.
 - [x] Cola probada de extremo a extremo desde la GUI: 4/4 archivos convertidos.
+- [x] Release privada `v0.1.0` con MSI, NSIS, DEB y `SHA256SUMS.txt`.
 
 Resultados de la última ejecución (2026-11-20):
 
@@ -410,11 +411,10 @@ Windows:     13/13 bajo Wine
 
 ## 12. Siguientes pasos recomendados
 
-1. **Distribución**: decidir si se publica una release privada con los instaladores (los artefactos de Actions caducan).
-2. **Firma de código** en Windows para reducir avisos de SmartScreen (opcional).
-3. **Reducir tamaño**: valorar un FFmpeg más ligero o un Pandoc sin datos innecesarios; hoy el NSIS pesa 92 MB.
-4. **Ajustes de UX**: nombres largos, carpetas con muchos archivos, textos de error de los motores.
-5. **Fase 2**: LibreOffice para Office/PDF, presets, perfiles de calidad, conversión recursiva opcional, notificaciones.
+1. **Firma de código** en Windows para reducir avisos de SmartScreen (opcional).
+2. **Reducir tamaño**: valorar un FFmpeg más ligero o un Pandoc sin datos innecesarios; hoy el NSIS pesa 92 MB.
+3. **Ajustes de UX**: nombres largos, carpetas con muchos archivos, textos de error de los motores.
+4. **Fase 2**: LibreOffice para Office/PDF, presets, perfiles de calidad, conversión recursiva opcional, notificaciones.
 
 ---
 
@@ -490,5 +490,6 @@ git config user.email "349978655+Acd212@users.noreply.github.com"
 - CI: `.github/workflows/build.yml`; última ejecución verde `44811808230`.
 - Artefactos del run: `convertall-linux` (.deb) y `convertall-windows` (.msi + .exe).
 - El instalador incluye `licenses/` (FFmpeg y Pandoc) además de `tools/`.
+- Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0` (MSI, NSIS, DEB y checksums).
 
 No hay secretos dentro del proyecto. La autenticación de GitHub vive fuera del repo.

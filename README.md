@@ -31,6 +31,13 @@ Pendiente:
 - Office/PDF de alta fidelidad con LibreOffice (fase 2).
 - Presets, perfiles y más ajustes por formato.
 
+## Descargas
+
+Los instaladores de **v0.1.0** están en [Releases](https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0):
+
+- Windows: `.msi` y `.exe` con todos los motores incluidos.
+- Linux: `.deb` (usa los motores del sistema).
+
 ## Requisitos de desarrollo
 
 - Rust estable (`rustc`, `cargo`).

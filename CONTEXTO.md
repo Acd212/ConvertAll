@@ -292,7 +292,7 @@ Si el motor no está disponible, `get_targets` filtra esos formatos y `inspect_f
 Además de comprobar que el binario existe, `get_targets` consulta sus capacidades reales:
 
 - FFmpeg: `ffmpeg -encoders` y exige los codecs necesarios por destino (`libx264`, `libvpx-vp9`, `libtheora`, `libopencore_amrnb`, etc.). Si un codec no está en el build, el formato no se ofrece.
-- ImageMagick: `magick -list format` y exige modo de escritura (`rw-`/`rw+`). `jpg` se mapea a `JPEG`.
+- ImageMagick: `magick -list format` y exige modo de escritura (`rw-`/`rw+`). `jpg` se mapea a `JPEG`. Linux imprime `JPEG* JPEG rw- ...`; Windows imprime `JPEG* rw- ...` (sin columna de módulo), así que el parser busca el token de modo en los primeros cuatro en vez de usar un índice fijo.
 - Pandoc: `pandoc --list-output-formats`. `md→gfm`, `txt→plain`, `tex→latex`.
 
 Si el sondeo falla, se permite el formato (`Capabilities::All`) y el error aparecerá al convertir; es preferible a ocultar opciones válidas. Esto es importante porque la build de Windows puede no incluir todos los codecs de la de Linux.
@@ -392,16 +392,17 @@ Implementado y verificado:
 - [x] Tema oscuro/claro y UI en español.
 - [x] Workflow de CI para Linux y Windows.
 - [x] `bun install` + `svelte-check` (0 errores) + `vite build` + `cargo check`.
-- [x] `cargo test`: 11 pruebas correctas.
+- [x] `cargo test`: 12 pruebas correctas.
 - [x] Iconos generados con `tauri icon` desde `assets/icon.svg`.
 - [x] La app arranca en Xvfb y muestra los cuatro motores en verde.
 - [x] Conversiones reales: 77/77 correctas con `scripts/test-conversions.sh`.
 - [x] Repo privado creado y primer push: `Acd212/ConvertAll`.
-- [x] CI Linux + Windows verde (run 44811808230).
+- [x] CI Linux + Windows verde (run 44822379426).
 - [x] Instaladores de Windows con motores y licencias incluidas; 13/13 conversiones bajo Wine.
 - [x] AppImage de Linux con WebKit2GTK 4.1 incluido; probado bajo Xvfb.
+- [x] v0.1.1 corrige el sondeo de ImageMagick en Windows (sin columna de módulo).
 - [x] Cola probada de extremo a extremo desde la GUI: 4/4 archivos convertidos.
-- [x] Release privada `v0.1.0` con MSI, NSIS, DEB, AppImage y `SHA256SUMS.txt`.
+- [x] Release privada `v0.1.1` con MSI, NSIS, DEB, AppImage y `SHA256SUMS.txt`.
 
 Resultados de la última ejecución (2026-11-20):
 
@@ -441,6 +442,9 @@ Windows:     13/13 bajo Wine
 - Los formatos de imagen son un caso especial: `engine` es el pseudo-motor `"image"`, que se resuelve a ImageMagick o libvips.
 - `gif` es categoría imagen, pero también es destino válido desde vídeo (FFmpeg).
 - ICO y CUR exigen `-define icon:auto-resize=256,128,64,48,32,16`; sin ello ImageMagick falla si la imagen supera 256 px.
+- ImageMagick en Windows omite la columna de módulo en `-list format`. No asumir índices fijos: buscar el token con forma de modo (`rw-`, `rw+`, etc.). Hay una prueba de regresión.
+- libvips es opcional en Windows porque ImageMagick es el motor de imagen. La UI lo muestra como «No necesario» (gris) si ImageMagick está disponible.
+- El aviso de Pandoc debe servir para AppImage/deb: no referenciar scripts del repositorio.
 - EPS/PostScript depende de Ghostscript; por eso EPS es solo lectura en el catálogo y puede fallar en Windows.
 - Las conversiones escriben a un archivo temporal y renombran al terminar; así no quedan salidas corruptas al cancelar o fallar.
 - DTS usa el encoder experimental `dca`: requiere `-strict -2`.
@@ -497,10 +501,10 @@ git config user.name "Acd212"
 git config user.email "349978655+Acd212@users.noreply.github.com"
 ```
 
-- CI: `.github/workflows/build.yml`; última ejecución verde `44818064655`.
+- CI: `.github/workflows/build.yml`; última ejecución verde `44822379426`.
 - Artefactos del run: `convertall-linux` (.deb + .AppImage) y `convertall-windows` (.msi + .exe).
 - El instalador incluye `licenses/` (FFmpeg y Pandoc) además de `tools/`.
-- Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0` (MSI, NSIS, DEB, AppImage y checksums).
+- Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.1` (MSI, NSIS, DEB, AppImage y checksums).
 - El AppImage incluye WebKit2GTK 4.1/GTK3; no requiere instalar WebKit. Los motores siguen siendo del sistema.
 
 No hay secretos dentro del proyecto. La autenticación de GitHub vive fuera del repo.

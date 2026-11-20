@@ -19,7 +19,7 @@ Proyecto en fase **M1**: shell funcional, detección de motores, cola de archivo
 Verificado en Linux y Windows:
 
 - `svelte-check` sin errores, build de Vite y `cargo check` correctos.
-- 11 pruebas Rust correctas.
+- 12 pruebas Rust correctas.
 - 77 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
 - 4 archivos convertidos desde la GUI (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
 - Instaladores de Windows generados: MSI de 132 MB y NSIS de 92 MB con FFmpeg, Pandoc e ImageMagick incluidos.
@@ -33,10 +33,12 @@ Pendiente:
 
 ## Descargas
 
-Los instaladores de **v0.1.0** están en [Releases](https://github.com/Acd212/ConvertAll/releases/tag/v0.1.0):
+Los instaladores de **v0.1.1** están en [Releases](https://github.com/Acd212/ConvertAll/releases/tag/v0.1.1):
 
 - Windows: `.msi` y `.exe` con todos los motores incluidos.
 - Linux: `.deb` y `.AppImage`.
+
+La v0.1.1 corrige el sondeo de ImageMagick en Windows, que dejaba la lista de formatos de imagen vacía. Es la versión recomendada.
 
 El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips y Pandoc) sí siguen siendo del sistema, igual que en el `.deb`.
 

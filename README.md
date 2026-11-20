@@ -10,22 +10,26 @@ Usa motores nativos en lugar de WebAssembly:
 
 La interfaz está construida con **Tauri 2 + Svelte 5 + Tailwind CSS 4** y el backend con **Rust**.
 
+![Captura de ConvertAll](docs/captura.png)
+
 ## Estado
 
 Proyecto en fase **M1**: shell funcional, detección de motores, cola de archivos, selección de formato, progreso, cancelación y conversión local.
 
-Verificado en Linux:
+Verificado en Linux y Windows:
 
 - `svelte-check` sin errores, build de Vite y `cargo check` correctos.
 - 11 pruebas Rust correctas.
-- 77 conversiones reales correctas (imagen, audio, vídeo y documentos).
+- 77 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
+- 4 archivos convertidos desde la GUI (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
+- Instaladores de Windows generados: MSI de 132 MB y NSIS de 92 MB con FFmpeg, Pandoc e ImageMagick incluidos.
+- Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
 - La app arranca y detecta FFmpeg, ImageMagick, libvips y Pandoc.
 
 Pendiente:
 
-- Verificar el instalador de Windows en GitHub Actions.
-- Probar la cola desde la GUI de forma manual.
 - Office/PDF de alta fidelidad con LibreOffice (fase 2).
+- Presets, perfiles y más ajustes por formato.
 
 ## Requisitos de desarrollo
 
@@ -50,6 +54,12 @@ bun install
 ```
 
 `scripts/env.sh` redirige `CARGO_HOME`, `CARGO_TARGET_DIR`, la caché de Bun/npm y `TMPDIR` a `./cache/`.
+
+También puedes abrir archivos directamente desde la terminal (o con «Abrir con…»):
+
+```bash
+convertall imagen.png audio.wav video.mp4 documento.md
+```
 
 ## Comprobar
 
@@ -98,6 +108,7 @@ src-tauri/src/       Backend Rust
   commands.rs        Comandos de Tauri
 scripts/             Entorno, builds, pruebas y descarga de herramientas
 assets/icon.svg      Fuente de los iconos
+docs/captura.png     Captura de la interfaz
 cache/               Caché y artefactos (ignorado por git)
 CONTEXTO.md          Contexto para retomar el proyecto con otro agente
 ```

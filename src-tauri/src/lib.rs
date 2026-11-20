@@ -26,6 +26,7 @@ pub fn run() {
             commands::convert_file,
             commands::cancel_job,
             commands::default_output_dir,
+            commands::startup_files,
             commands::scan_folder,
             commands::open_in_file_manager,
         ])

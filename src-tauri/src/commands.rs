@@ -129,6 +129,16 @@ pub fn default_output_dir() -> String {
 }
 
 #[tauri::command]
+pub fn startup_files() -> Vec<String> {
+    std::env::args_os()
+        .skip(1)
+        .filter(|argument| !argument.to_string_lossy().starts_with('-'))
+        .filter(|argument| Path::new(argument).is_file())
+        .map(|argument| argument.to_string_lossy().to_string())
+        .collect()
+}
+
+#[tauri::command]
 pub fn scan_folder(path: String) -> Result<Vec<String>, String> {
     let root = PathBuf::from(&path);
     if !root.is_dir() {

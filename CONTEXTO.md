@@ -56,8 +56,8 @@ La app **no reutiliza código de VERT**. VERT es AGPL-3.0 y está hecho en Svelt
 │ Rust (Tauri 2)                                               │
 │  commands.rs  → detect_engines, get_catalog, get_targets,    │
 │                 inspect_file, convert_file, cancel_job,      │
-│                 default_output_dir, scan_folder,             │
-│                 open_in_file_manager                         │
+│                 default_output_dir, startup_files,           │
+│                 scan_folder, open_in_file_manager            │
 │  formats.rs   → catálogo de formatos y reglas de conversión  │
 │  engines.rs   → localiza FFmpeg/ImageMagick/libvips/Pandoc   │
 │  capabilities.rs → codecs/formatos reales de cada motor      │
@@ -118,6 +118,7 @@ Dependencias Rust principales:
 ├── README.md
 ├── LICENSE
 ├── assets/icon.svg               fuente de los iconos
+├── docs/captura.png             captura de la interfaz
 ├── package.json
 ├── bun.lock
 ├── vite.config.ts               salida del frontend → cache/dist
@@ -232,6 +233,7 @@ Los comandos de Tauri viven en `src-tauri/src/commands.rs`.
 | `convert_file` | `{ request: ConvertRequest }` | `ConvertResult` |
 | `cancel_job` | `{ jobId }` | `void` |
 | `default_output_dir` | — | `string` |
+| `startup_files` | — | `string[]` (archivos pasados por CLI) |
 | `scan_folder` | `{ path }` | `string[]` (máx. 1000, profundidad 16) |
 | `open_in_file_manager` | `{ path }` | `void` |
 
@@ -342,10 +344,25 @@ El workflow `.github/workflows/build.yml`:
 
 Pendiente de verificar en CI:
 
-- Que la carpeta de ImageMagick se copie completa.
-- Que `MAGICK_HOME` funcione con la build portable.
-- Que NSIS/MSI incluyan los binarios.
-- Qué codecs trae el FFmpeg essentials de gyan (la UI ocultará los que falten).
+- [x] La carpeta de ImageMagick se copia completa.
+- [x] `MAGICK_HOME` funciona con la build portable.
+- [x] NSIS/MSI incluyen los binarios.
+- [x] Codecs del FFmpeg essentials: incluye todos los usados (`libx264`, `libvpx-vp9`, `libtheora`, `libopencore_amrnb`, `dca`, etc.).
+
+Resultados reales (run 44804003751):
+
+```text
+MSI:  132,06 MiB
+NSIS:  92,13 MiB
+tools/ffmpeg.exe, tools/ffprobe.exe, tools/pandoc.exe, tools/magick/magick.exe
+```
+
+Los binarios de Windows se probaron bajo Wine:
+
+- `ffmpeg 9.1-essentials_build` y `ffprobe 9.1`.
+- `pandoc 3.14`.
+- `ImageMagick 7.1.2-36 Q16 x64`.
+- 13/13 conversiones correctas (JPG, ICO, WebP, AVIF, HEIC, JXL, MP3, FLAC, MKV, WebM, GIF, DOCX, HTML).
 
 ---
 
@@ -368,9 +385,10 @@ Implementado y verificado:
 - [x] Iconos generados con `tauri icon` desde `assets/icon.svg`.
 - [x] La app arranca en Xvfb y muestra los cuatro motores en verde.
 - [x] Conversiones reales: 77/77 correctas con `scripts/test-conversions.sh`.
-- [ ] Crear repo privado y primer push.
-- [ ] Verificar build de Windows en Actions.
-- [ ] Probar la cola desde la GUI (arrastrar, progreso, cancelar) de forma manual.
+- [x] Repo privado creado y primer push: `Acd212/ConvertAll`.
+- [x] CI Linux + Windows verde (run 44804003751).
+- [x] Instaladores de Windows con motores incluidos; 13/13 conversiones bajo Wine.
+- [x] Cola probada de extremo a extremo desde la GUI: 4/4 archivos convertidos.
 
 Resultados de la última ejecución (2026-11-20):
 
@@ -380,6 +398,8 @@ Audio:       16/16 destinos
 Vídeo:       18/18 destinos (incluye MP3 y GIF)
 Documentos:  19/19 destinos
 Total:       77/77
+GUI:         PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX
+Windows:     13/13 bajo Wine
 ```
 
 > Actualizar esta sección al terminar cada fase.
@@ -388,9 +408,9 @@ Total:       77/77
 
 ## 12. Siguientes pasos recomendados
 
-1. **Repo y CI**: `git init`, commit, `gh repo create ConvertAll --private --source=. --remote=origin --push`; revisar Actions.
-2. **Verificar Windows**: comprobar que el instalador incluye `tools/`, que ImageMagick arranca y que los formatos ocultos coinciden con los codecs disponibles.
-3. **Prueba manual de la GUI**: arrastrar un lote, convertir, cancelar a mitad, reintentar y revisar la carpeta de salida.
+1. **Distribución**: decidir si se publica una release privada con los instaladores (los artefactos de Actions caducan).
+2. **Firma de código** en Windows para reducir avisos de SmartScreen (opcional).
+3. **Reducir tamaño**: valorar un FFmpeg más ligero o un Pandoc sin datos innecesarios; hoy el NSIS pesa 92 MB.
 4. **Ajustes de UX**: nombres largos, carpetas con muchos archivos, textos de error de los motores.
 5. **Fase 2**: LibreOffice para Office/PDF, presets, perfiles de calidad, conversión recursiva opcional, notificaciones.
 
@@ -415,6 +435,7 @@ Total:       77/77
 - APE es solo lectura: FFmpeg lo decodifica pero no lo codifica.
 - Pandoc se descarga como `bin/pandoc`; el script lo mueve a `cache/tools/pandoc`.
 - TypeScript está fijado a `~6` porque `svelte-check` 4.x no soporta TypeScript 7.
+- Los archivos pasados por línea de comandos se recogen con `startup_files` y se añaden a la cola al iniciar.
 - PDF y Office están fuera de v1 a propósito.
 - No copiar código de VERT (AGPL). Inspiración de UX, no de implementación.
 - `cache/` y `node_modules/` nunca se commitean.
@@ -455,18 +476,15 @@ Si algo falla, revisar primero:
 
 - Cuenta: `Acd212`.
 - `gh` autenticado con scopes `repo`, `workflow`, `read:org`, `gist`.
-- Repo previsto: `Acd212/ConvertAll` (privado).
-- Identidad git recomendada (solo en el repo):
+- Repo creado: `Acd212/ConvertAll` (privado), rama `main`.
+- Identidad configurada solo en el repo:
 
 ```bash
 git config user.name "Acd212"
-git config user.email "<ID>+Acd212@users.noreply.github.com"
+git config user.email "349978655+Acd212@users.noreply.github.com"
 ```
 
-Obtener el ID:
-
-```bash
-gh api user --jq '.id'
-```
+- CI: `.github/workflows/build.yml`; última ejecución verde `44804003751`.
+- Artefactos del run: `convertall-linux` (.deb) y `convertall-windows` (.msi + .exe).
 
 No hay secretos dentro del proyecto. La autenticación de GitHub vive fuera del repo.

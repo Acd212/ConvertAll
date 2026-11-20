@@ -125,6 +125,11 @@
         ...emptyTargets(),
         ...(Object.fromEntries(entries) as Record<Category, FormatDef[]>),
       };
+
+      const initialPaths = await api.startupFiles();
+      if (initialPaths.length > 0) {
+        await addPaths(initialPaths);
+      }
     } catch (error) {
       showToast(String(error), "error");
     } finally {

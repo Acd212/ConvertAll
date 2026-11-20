@@ -20,6 +20,7 @@ export const api = {
     invoke<ConvertResult>("convert_file", { request }),
   cancelJob: (jobId: string) => invoke<void>("cancel_job", { jobId }),
   defaultOutputDir: () => invoke<string>("default_output_dir"),
+  startupFiles: () => invoke<string[]>("startup_files"),
   scanFolder: (path: string) => invoke<string[]>("scan_folder", { path }),
   openInFileManager: (path: string) =>
     invoke<void>("open_in_file_manager", { path }),

@@ -127,16 +127,23 @@ fn parse_magick_formats(text: &str) -> HashMap<String, String> {
 
     for line in text.lines() {
         let tokens: Vec<&str> = line.split_whitespace().collect();
-        if tokens.len() < 3 {
+        if tokens.is_empty() {
             continue;
         }
-        let mode = tokens[2];
-        if mode.len() != 3 || !mode.chars().all(|c| "rw+-".contains(c)) {
+
+        // Linux:  `JPEG* JPEG rw- ...` (nombre, módulo, modo)
+        // Windows: `JPEG* rw- ...`      (sin columna de módulo)
+        // Se busca el primer token con forma de modo para soportar ambos.
+        let mode = tokens.iter().take(4).find(|token| {
+            token.len() == 3 && token.chars().all(|character| "rw+-".contains(character))
+        });
+        let Some(mode) = mode else {
             continue;
-        }
+        };
+
         let name = tokens[0].trim_end_matches('*').to_ascii_uppercase();
         if !name.is_empty() {
-            formats.insert(name, mode.to_string());
+            formats.insert(name, (*mode).to_string());
         }
     }
 
@@ -210,6 +217,20 @@ mod tests {
         assert_eq!(formats.get("JPEG").map(String::as_str), Some("rw-"));
         assert_eq!(formats.get("AVIF").map(String::as_str), Some("rw+"));
         assert_eq!(formats.get("ARW").map(String::as_str), Some("r--"));
+    }
+
+    #[test]
+    fn parses_magick_windows_layout_without_module_column() {
+        let text = "   Format  Mode  Description\n     JPEG* rw-   Joint Photographic Experts Group\n     WEBP* rw+   WebP Image Format\n      ARW  r--   Sony Alpha Raw Format\n      HEIC  r--  High Efficiency Image Format\n";
+        let formats = parse_magick_formats(text);
+        assert_eq!(formats.get("JPEG").map(String::as_str), Some("rw-"));
+        assert_eq!(formats.get("WEBP").map(String::as_str), Some("rw+"));
+        assert_eq!(formats.get("ARW").map(String::as_str), Some("r--"));
+
+        let capabilities = Capabilities::Magick(formats);
+        assert!(capabilities.supports("jpg"));
+        assert!(capabilities.supports("webp"));
+        assert!(!capabilities.supports("heic"));
     }
 
     #[test]

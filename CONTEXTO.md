@@ -487,7 +487,8 @@ git config user.name "Acd212"
 git config user.email "349978655+Acd212@users.noreply.github.com"
 ```
 
-- CI: `.github/workflows/build.yml`; última ejecución verde `44804003751`.
+- CI: `.github/workflows/build.yml`; última ejecución verde `44811808230`.
 - Artefactos del run: `convertall-linux` (.deb) y `convertall-windows` (.msi + .exe).
+- El instalador incluye `licenses/` (FFmpeg y Pandoc) además de `tools/`.
 
 No hay secretos dentro del proyecto. La autenticación de GitHub vive fuera del repo.

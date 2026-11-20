@@ -4,9 +4,11 @@ $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $tools = Join-Path $root "src-tauri/resources/windows"
+$licenses = Join-Path $tools "licenses"
 $tempRoot = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { $env:TEMP }
 $temp = Join-Path $tempRoot "convertall-tools"
 New-Item -ItemType Directory -Force -Path $tools | Out-Null
+New-Item -ItemType Directory -Force -Path $licenses | Out-Null
 New-Item -ItemType Directory -Force -Path $temp | Out-Null
 
 Write-Host "==> Descargando FFmpeg"
@@ -19,6 +21,13 @@ if (-not $ffmpegExe -or -not $ffprobeExe) { throw "No se encontraron ffmpeg.exe/
 Copy-Item $ffmpegExe.FullName (Join-Path $tools "ffmpeg.exe") -Force
 Copy-Item $ffprobeExe.FullName (Join-Path $tools "ffprobe.exe") -Force
 
+$ffmpegRoot = Split-Path -Parent (Split-Path -Parent $ffmpegExe.FullName)
+Get-ChildItem $ffmpegRoot -File |
+  Where-Object { $_.Name -match "^(LICENSE|README)" } |
+  ForEach-Object {
+    Copy-Item $_.FullName (Join-Path $licenses "ffmpeg-$($_.Name)") -Force
+  }
+
 Write-Host "==> Descargando Pandoc"
 $release = Invoke-RestMethod -Uri "https://api.github.com/repos/jgm/pandoc/releases/latest" -Headers @{ "User-Agent" = "ConvertAll-Build" }
 $asset = $release.assets | Where-Object { $_.name -match "windows-x86_64\.zip$" } | Select-Object -First 1
@@ -29,6 +38,13 @@ Expand-Archive -Path $pandocZip -DestinationPath (Join-Path $temp "pandoc") -For
 $pandocExe = Get-ChildItem -Path (Join-Path $temp "pandoc") -Filter "pandoc.exe" -Recurse | Select-Object -First 1
 if (-not $pandocExe) { throw "No se encontró pandoc.exe" }
 Copy-Item $pandocExe.FullName (Join-Path $tools "pandoc.exe") -Force
+
+$pandocRoot = Split-Path -Parent $pandocExe.FullName
+Get-ChildItem $pandocRoot -File |
+  Where-Object { $_.Name -match "^(COPYING|COPYRIGHT|LICENSE)" } |
+  ForEach-Object {
+    Copy-Item $_.FullName (Join-Path $licenses "pandoc-$($_.Name)") -Force
+  }
 
 Write-Host "==> Descargando ImageMagick"
 # ImageMagick ya no publica .zip portable; el asset oficial es .7z.

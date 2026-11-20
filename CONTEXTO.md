@@ -117,6 +117,7 @@ Dependencias Rust principales:
 ├── CONTEXTO.md                  ← este archivo
 ├── README.md
 ├── LICENSE
+├── THIRD_PARTY_LICENSES.md
 ├── assets/icon.svg               fuente de los iconos
 ├── docs/captura.png             captura de la interfaz
 ├── package.json
@@ -325,6 +326,7 @@ resources/windows/ffmpeg.exe   → tools/ffmpeg.exe
 resources/windows/ffprobe.exe  → tools/ffprobe.exe
 resources/windows/pandoc.exe   → tools/pandoc.exe
 resources/windows/magick/      → tools/magick/        (carpeta completa)
+resources/windows/licenses/    → licenses/           (FFmpeg, Pandoc)
 ```
 
 La carpeta de ImageMagick se mapea como **directorio**, no como glob. Tauri aplana los globs (`**/*`) en el destino; al usar la carpeta preserva subcarpetas y DLLs.
@@ -438,6 +440,7 @@ Windows:     13/13 bajo Wine
 - Los archivos pasados por línea de comandos se recogen con `startup_files` y se añaden a la cola al iniciar.
 - PDF y Office están fuera de v1 a propósito.
 - No copiar código de VERT (AGPL). Inspiración de UX, no de implementación.
+- El instalador incluye `licenses/` con los textos de FFmpeg y Pandoc; ImageMagick trae los suyos en `tools/magick/`. Ver `THIRD_PARTY_LICENSES.md`.
 - `cache/` y `node_modules/` nunca se commitean.
 - El token de GitHub no se guarda en el repo.
 

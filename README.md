@@ -117,4 +117,4 @@ CONTEXTO.md          Contexto para retomar el proyecto con otro agente
 
 MIT. ConvertAll es un proyecto original inspirado en la experiencia de VERT; no reutiliza su código (AGPL-3.0).
 
-Los motores externos conservan sus propias licencias: FFmpeg (GPL/LGPL según build), ImageMagick, libvips (LGPL) y Pandoc (GPL-2.0+).
+Los motores externos conservan sus propias licencias: FFmpeg (GPL/LGPL según build), ImageMagick, libvips (LGPL) y Pandoc (GPL-2.0+). Ver `THIRD_PARTY_LICENSES.md`.

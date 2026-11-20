@@ -1,0 +1,10 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/windows/ffmpeg.exe": "tools/ffmpeg.exe",
+      "resources/windows/ffprobe.exe": "tools/ffprobe.exe",
+      "resources/windows/pandoc.exe": "tools/pandoc.exe",
+      "resources/windows/magick": "tools/magick"
+    }
+  }
+}

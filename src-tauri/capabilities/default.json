@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capacidades por defecto de ConvertAll",
+  "windows": ["main"],
+  "permissions": ["core:default", "dialog:default"]
+}

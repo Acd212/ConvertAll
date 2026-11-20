@@ -1,0 +1,24 @@
+# Dependencias y artefactos
+node_modules/
+cache/
+dist/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+src-tauri/resources/windows/*
+
+# Variables y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/

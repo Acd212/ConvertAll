@@ -46,16 +46,14 @@ jobs:
           CARGO_TARGET_DIR: ${{ github.workspace }}/cache/cargo-target
 
       - name: Compilar
-        run: bunx tauri build --bundles deb,appimage
+        run: bunx tauri build --bundles appimage
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/cache/cargo-target
 
       - uses: actions/upload-artifact@v4
         with:
           name: convertall-linux
-          path: |
-            cache/cargo-target/release/bundle/deb/*.deb
-            cache/cargo-target/release/bundle/appimage/*.AppImage
+          path: cache/cargo-target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
   windows:
@@ -77,14 +75,12 @@ jobs:
         run: ./scripts/fetch-tools-windows.ps1
 
       - name: Compilar
-        run: bunx tauri build --ci
+        run: bunx tauri build --ci --bundles nsis
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}\cache\cargo-target
 
       - uses: actions/upload-artifact@v4
         with:
           name: convertall-windows
-          path: |
-            cache/cargo-target/release/bundle/msi/*.msi
-            cache/cargo-target/release/bundle/nsis/*.exe
+          path: cache/cargo-target/release/bundle/nsis/*.exe
           if-no-files-found: error

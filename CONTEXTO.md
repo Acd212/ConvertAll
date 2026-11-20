@@ -40,6 +40,7 @@ La app **no reutiliza código de VERT**. VERT es AGPL-3.0 y está hecho en Svelt
 | Repo | Privado por ahora |
 | Caché | Todo lo compilado/descargado en `./cache/` |
 | Distribución | Sin firma de código por ahora (SmartScreen avisará en Windows) |
+| Artefactos de release | Windows: `setup.exe` (NSIS). Linux: `.AppImage`. No se publican MSI ni DEB (desde 0.1.1) |
 
 ---
 
@@ -339,8 +340,9 @@ La carpeta de ImageMagick se mapea como **directorio**, no como glob. Tauri apla
 
 El workflow `.github/workflows/build.yml`:
 
-- Linux: `ubuntu-24.04`, `bunx tauri build --bundles deb,appimage`.
-- Windows: `windows-latest`, descarga motores, `bunx tauri build --ci`, sube `.msi`/`.exe`.
+- Linux: `ubuntu-24.04`, `bunx tauri build --bundles appimage`; sube solo `.AppImage`.
+- Windows: `windows-latest`, descarga motores, `bunx tauri build --ci --bundles nsis`; sube solo `.exe` (NSIS).
+- MSI y DEB ya no se generan en CI ni se publican en releases nuevas.
 
 `engines.rs` busca primero `CONVERTALL_TOOLS_DIR`, luego `resource_dir()/tools`, luego `PATH`. Para ImageMagick portable define `MAGICK_HOME` y añade su carpeta al `PATH`.
 
@@ -368,13 +370,12 @@ Los binarios de Windows se probaron bajo Wine:
 
 ### Linux: deb + AppImage
 
-El CI compila `--bundles deb,appimage`:
+El CI compila solo `--bundles appimage`:
 
-- `.deb` (~1,9 MB): binario + escritorio + iconos; motores del sistema.
-- `.AppImage` (~108 MB): incluye WebKit2GTK 4.1, GTK3, libsoup y los procesos WebKit, por lo que no hace falta instalar WebKit en el sistema. Los motores siguen siendo del sistema.
+- `.AppImage` (~80 MB en CI): incluye WebKit2GTK 4.1, GTK3, libsoup y los procesos WebKit, por lo que no hace falta instalar WebKit en el sistema. Los motores siguen siendo del sistema.
+- El `.deb` ya no se genera ni se publica (política desde 0.1.1).
 
 El AppImage se probó bajo Xvfb y abre la cola correctamente con archivos pasados por CLI.
-
 ---
 
 ## 11. Estado actual
@@ -403,6 +404,7 @@ Implementado y verificado:
 - [x] v0.1.1 corrige el sondeo de ImageMagick en Windows (sin columna de módulo).
 - [x] Cola probada de extremo a extremo desde la GUI: 4/4 archivos convertidos.
 - [x] Release privada `v0.1.1` con MSI, NSIS, DEB, AppImage y `SHA256SUMS.txt`.
+- [x] Política desde 0.1.1: las releases nuevas incluyen solo `AppImage` y `setup.exe` (NSIS).
 
 Resultados de la última ejecución (2026-11-20):
 
@@ -502,9 +504,10 @@ git config user.email "349978655+Acd212@users.noreply.github.com"
 ```
 
 - CI: `.github/workflows/build.yml`; última ejecución verde `44822379426`.
-- Artefactos del run: `convertall-linux` (.deb + .AppImage) y `convertall-windows` (.msi + .exe).
+- Artefactos del run: `convertall-linux` (.AppImage) y `convertall-windows` (.exe NSIS).
 - El instalador incluye `licenses/` (FFmpeg y Pandoc) además de `tools/`.
 - Release: `https://github.com/Acd212/ConvertAll/releases/tag/v0.1.1` (MSI, NSIS, DEB, AppImage y checksums).
+- **Política de release:** a partir de 0.1.1 solo se publican `AppImage` y `setup.exe`. No volver a subir MSI ni DEB en versiones nuevas.
 - El AppImage incluye WebKit2GTK 4.1/GTK3; no requiere instalar WebKit. Los motores siguen siendo del sistema.
 
 No hay secretos dentro del proyecto. La autenticación de GitHub vive fuera del repo.

@@ -33,10 +33,12 @@ Pendiente:
 
 ## Descargas
 
-Los instaladores de **v0.1.1** están en [Releases](https://github.com/Acd212/ConvertAll/releases/tag/v0.1.1):
+A partir de **v0.1.1**, cada release publica solo:
 
-- Windows: `.msi` y `.exe` con todos los motores incluidos.
-- Linux: `.deb` y `.AppImage`.
+- Windows: `ConvertAll_x.y.z_x64-setup.exe` (NSIS), con todos los motores incluidos.
+- Linux: `ConvertAll_x.y.z_amd64.AppImage`.
+
+La release 0.1.1 conserva además el `.msi` y el `.deb`, pero **no se incluirán en futuras versiones**.
 
 La v0.1.1 corrige el sondeo de ImageMagick en Windows, que dejaba la lista de formatos de imagen vacía. Es la versión recomendada.
 

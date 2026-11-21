@@ -19,9 +19,10 @@ Proyecto en fase **M1**: shell funcional, detección de motores, cola de archivo
 Verificado en Linux y Windows:
 
 - `svelte-check` sin errores, build de Vite y `cargo check` correctos.
-- 12 pruebas Rust correctas.
+- 14 pruebas Rust correctas.
 - 77 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
-- 4 archivos convertidos desde la GUI (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
+- 4 archivos convertidos desde la GUI y desde el AppImage (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
+- El AppImage aísla los motores de sus propias bibliotecas para que libvips e ImageMagick usen las del sistema.
 - Paquete portable de Windows (`.zip`) con FFmpeg, Pandoc e ImageMagick incluidos.
 - Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
 - La app arranca y detecta FFmpeg, ImageMagick, libvips y Pandoc.
@@ -33,7 +34,7 @@ Pendiente:
 
 ## Descargas
 
-A partir de **v0.1.2** se mantiene una sola release con la última versión:
+A partir de **v0.1.2** se mantiene una sola release con la última versión: [Releases](https://github.com/Acd212/ConvertAll/releases/latest).
 
 - Windows: `ConvertAll_x.y.z_x64-portable.zip`, sin instalador. Descomprime y ejecuta `ConvertAll.exe`.
 - Linux: `ConvertAll_x.y.z_amd64.AppImage`.

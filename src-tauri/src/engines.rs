@@ -93,12 +93,35 @@ pub fn available(app: &AppHandle, id: &str) -> bool {
 pub(crate) fn hidden_command(path: &Path) -> Command {
     #[allow(unused_mut)]
     let mut command = Command::new(path);
+    sanitize_std_command(&mut command);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
     }
     command
+}
+
+/// Dentro de un AppImage se hereda `LD_LIBRARY_PATH` con las bibliotecas
+/// empaquetadas (por ejemplo, un libtiff más antiguo). Eso rompe los motores
+/// del sistema, como libvips. Los procesos hijos deben usar las bibliotecas
+/// del sistema, así que se limpia ese entorno para ellos.
+fn inside_appimage() -> bool {
+    std::env::var_os("APPIMAGE").is_some() || std::env::var_os("APPDIR").is_some()
+}
+
+pub(crate) fn sanitize_std_command(command: &mut Command) {
+    if inside_appimage() {
+        command.env_remove("LD_LIBRARY_PATH");
+        command.env_remove("LD_PRELOAD");
+    }
+}
+
+pub(crate) fn sanitize_tokio_command(command: &mut tokio::process::Command) {
+    if inside_appimage() {
+        command.env_remove("LD_LIBRARY_PATH");
+        command.env_remove("LD_PRELOAD");
+    }
 }
 
 fn version_of(path: &Path, id: &str) -> Option<String> {
@@ -129,10 +152,10 @@ fn version_of(path: &Path, id: &str) -> Option<String> {
     text.lines()
         .map(str::trim)
         .find(|line| !line.is_empty())
-        .map(|line| short_version(id, line))
+        .and_then(|line| short_version(id, line))
 }
 
-fn short_version(id: &str, line: &str) -> String {
+fn short_version(id: &str, line: &str) -> Option<String> {
     let token = |text: &str| {
         text.split_whitespace()
             .next()
@@ -142,15 +165,26 @@ fn short_version(id: &str, line: &str) -> String {
     };
 
     match id {
-        FFMPEG => token(line.strip_prefix("ffmpeg version ").unwrap_or(line)),
-        MAGICK => token(line.strip_prefix("Version: ImageMagick ").unwrap_or(line)),
+        FFMPEG => line
+            .strip_prefix("ffmpeg version ")
+            .map(token),
+        MAGICK => line
+            .strip_prefix("Version: ImageMagick ")
+            .map(token),
         VIPS => line
             .trim()
             .strip_prefix("vips-")
             .map(str::to_string)
-            .unwrap_or_else(|| line.trim().to_string()),
-        PANDOC => token(line.strip_prefix("pandoc ").unwrap_or(line)),
-        _ => line.trim().to_string(),
+            .or_else(|| {
+                let trimmed = line.trim();
+                trimmed
+                    .chars()
+                    .next()
+                    .filter(char::is_ascii_digit)
+                    .map(|_| trimmed.to_string())
+            }),
+        PANDOC => line.strip_prefix("pandoc ").map(token),
+        _ => Some(line.trim().to_string()),
     }
 }
 
@@ -176,6 +210,8 @@ pub fn configure_tokio_command(
     engine: &str,
     path: &Path,
 ) {
+    sanitize_tokio_command(command);
+
     if let Some(parent) = path.parent() {
         let mut paths = vec![parent.to_path_buf()];
         if let Some(existing) = std::env::var_os("PATH") {
@@ -196,5 +232,31 @@ pub fn configure_tokio_command(
     {
         use std::os::windows::process::CommandExt;
         command.creation_flags(0x08000000);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::short_version;
+
+    #[test]
+    fn parses_known_version_lines() {
+        assert_eq!(
+            short_version("ffmpeg", "ffmpeg version n9.1-essentials_build Copyright").as_deref(),
+            Some("n9.1-essentials_build")
+        );
+        assert_eq!(
+            short_version("magick", "Version: ImageMagick 7.1.2-36 Q16 x64").as_deref(),
+            Some("7.1.2-36")
+        );
+        assert_eq!(short_version("vips", "vips-8.18.7").as_deref(), Some("8.18.7"));
+        assert_eq!(short_version("pandoc", "pandoc 3.14").as_deref(), Some("3.14"));
+    }
+
+    #[test]
+    fn ignores_loader_errors() {
+        let line = "/usr/bin/vips: /tmp/AppImage/usr/lib/libtiff.so.6: version `LIBTIFF_4.6.1' not found";
+        assert_eq!(short_version("vips", line), None);
+        assert_eq!(short_version("ffmpeg", "error while loading shared libraries"), None);
     }
 }

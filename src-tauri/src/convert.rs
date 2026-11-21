@@ -347,6 +347,7 @@ pub fn unique_output_path(path: &Path) -> PathBuf {
 async fn probe_duration(app: &AppHandle, input: &Path) -> Option<f64> {
     let ffprobe = engines::resolve_ffprobe(app)?;
     let mut command = Command::new(ffprobe);
+    engines::sanitize_tokio_command(&mut command);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

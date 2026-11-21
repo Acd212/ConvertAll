@@ -9,4 +9,12 @@ export interface QueueItem extends FileInfo {
   progress: number;
   outputPath?: string;
   error?: string;
+  videoHeight?: number;
+  imageMaxSide?: number;
+  audioBitrate?: number;
 }
+
+export type QueueOptionPatch = Pick<
+  QueueItem,
+  "videoHeight" | "imageMaxSide" | "audioBitrate"
+>;

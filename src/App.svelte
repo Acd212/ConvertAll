@@ -22,7 +22,7 @@
     FormatDef,
     ProgressPayload,
   } from "./lib/types";
-  import type { QueueItem } from "./lib/queue";
+  import type { QueueItem, QueueOptionPatch } from "./lib/queue";
   import { formatSize, categoryLabel } from "./lib/format";
   import Logo from "./lib/components/Logo.svelte";
   import EngineChips from "./lib/components/EngineChips.svelte";
@@ -324,7 +324,39 @@
 
   function onTargetChange(id: string, target: string) {
     const item = items.find((value) => value.id === id);
-    if (item) item.target = target;
+    if (!item) return;
+
+    item.target = target;
+
+    const format = (targets[item.category] ?? []).find(
+      (value) => value.id === target,
+    );
+    if (
+      !format ||
+      item.videoHeight === undefined ||
+      !format.videoHeights.includes(item.videoHeight)
+    ) {
+      item.videoHeight = undefined;
+    }
+    if (
+      !format ||
+      item.imageMaxSide === undefined ||
+      !format.imageSides.includes(item.imageMaxSide)
+    ) {
+      item.imageMaxSide = undefined;
+    }
+    if (
+      !format ||
+      item.audioBitrate === undefined ||
+      !format.audioBitrates.includes(item.audioBitrate)
+    ) {
+      item.audioBitrate = undefined;
+    }
+  }
+
+  function onItemOptionsChange(id: string, patch: QueueOptionPatch) {
+    const item = items.find((value) => value.id === id);
+    if (item) Object.assign(item, patch);
   }
 
   async function convertItem(item: QueueItem) {
@@ -343,6 +375,9 @@
         quality,
         preserveMetadata,
         overwrite,
+        videoHeight: item.videoHeight ?? null,
+        imageMaxSide: item.imageMaxSide ?? null,
+        audioBitrate: item.audioBitrate ?? null,
       });
 
       if (isCancelled(item)) return;
@@ -541,7 +576,7 @@
               </h2>
               <div class="mt-3 grid gap-2 text-[11px] text-muted sm:grid-cols-2">
                 <p>· Arrastra archivos o una carpeta completa.</p>
-                <p>· Elige el formato de salida por archivo.</p>
+                <p>· Elige formato y ajustes (resolución, tamaño o bitrate) por archivo.</p>
                 <p>· Ajusta la calidad y la carpeta de destino.</p>
                 <p>· Pulsa «Convertir todo» y revisa el progreso.</p>
               </div>
@@ -572,6 +607,7 @@
                     onCancel={cancelItem}
                     onOpen={openOutput}
                     onTargetChange={onTargetChange}
+                    onOptionsChange={onItemOptionsChange}
                   />
                 {/each}
               </ul>

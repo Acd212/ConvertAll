@@ -16,6 +16,9 @@ export interface FormatDef {
   canRead: boolean;
   canWrite: boolean;
   engine: string;
+  videoHeights: number[];
+  imageSides: number[];
+  audioBitrates: number[];
 }
 
 export interface FileInfo {
@@ -38,6 +41,9 @@ export interface ConvertRequest {
   quality: number;
   preserveMetadata: boolean;
   overwrite: boolean;
+  videoHeight: number | null;
+  imageMaxSide: number | null;
+  audioBitrate: number | null;
 }
 
 export interface ConvertResult {

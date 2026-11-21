@@ -23,6 +23,14 @@ impl Category {
     }
 }
 
+/// Alturas admitidas para vídeo. `1080p` limita el lado corto a 1080 px,
+/// así que también funciona con vídeo vertical sin ampliarlo.
+pub const VIDEO_HEIGHTS: &[u32] = &[2160, 1440, 1080, 720, 480, 360];
+
+/// Lados mayores admitidos para imágenes. Se aplica como caja cuadrada y
+/// nunca se amplía la imagen original.
+pub const IMAGE_SIDES: &[u32] = &[3840, 2560, 1920, 1280, 1024, 800, 640, 480];
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FormatDef {
@@ -33,6 +41,44 @@ pub struct FormatDef {
     pub can_read: bool,
     pub can_write: bool,
     pub engine: String,
+    /// Alturas que acepta el formato de salida (vacío si no es vídeo).
+    pub video_heights: Vec<u32>,
+    /// Lados mayores que acepta el formato de salida (vacío si no es imagen).
+    pub image_sides: Vec<u32>,
+    /// Bitrates en kbps que acepta el formato de salida (vacío si no aplica).
+    pub audio_bitrates: Vec<u32>,
+}
+
+fn video_heights_for(category: Category, can_write: bool) -> Vec<u32> {
+    if category == Category::Video && can_write {
+        VIDEO_HEIGHTS.to_vec()
+    } else {
+        Vec::new()
+    }
+}
+
+fn image_sides_for(id: &str, category: Category, can_write: bool) -> Vec<u32> {
+    // ICO y CUR generan sus propios tamaños de icono; no se les aplica un
+    // tamaño arbitrario para no romper el formato.
+    if category == Category::Image && can_write && !matches!(id, "ico" | "cur") {
+        IMAGE_SIDES.to_vec()
+    } else {
+        Vec::new()
+    }
+}
+
+fn audio_bitrates_for(id: &str) -> Vec<u32> {
+    match id {
+        "mp3" => vec![64, 96, 128, 160, 192, 256, 320],
+        // libvorbis rechaza 256 y 320 kbps en esta compilación.
+        "ogg" => vec![64, 96, 128, 160, 192],
+        "opus" => vec![32, 48, 64, 96, 128, 160, 192, 256],
+        "aac" | "m4a" | "m4b" => vec![64, 96, 128, 160, 192, 256, 320],
+        "wma" => vec![64, 96, 128, 160, 192],
+        "ac3" => vec![128, 192, 256, 384, 448, 640],
+        "dts" => vec![768, 1536],
+        _ => Vec::new(),
+    }
 }
 
 fn format(
@@ -52,6 +98,13 @@ fn format(
         can_read,
         can_write,
         engine: engine.to_string(),
+        video_heights: video_heights_for(category, can_write),
+        image_sides: image_sides_for(id, category, can_write),
+        audio_bitrates: if category == Category::Audio && can_write {
+            audio_bitrates_for(id)
+        } else {
+            Vec::new()
+        },
     }
 }
 
@@ -325,5 +378,37 @@ mod tests {
         let targets = targets_for(Category::Audio);
         assert!(!targets.iter().any(|format| format.id == "ape"));
         assert!(find_by_id("ape").expect("ape debe existir").can_read);
+    }
+
+    #[test]
+    fn options_are_exposed_per_format() {
+        let mp4 = find_by_id("mp4").expect("mp4");
+        assert_eq!(mp4.video_heights, VIDEO_HEIGHTS);
+        assert!(mp4.image_sides.is_empty());
+        assert!(mp4.audio_bitrates.is_empty());
+
+        let mp3 = find_by_id("mp3").expect("mp3");
+        assert!(mp3.audio_bitrates.contains(&128));
+        assert!(mp3.video_heights.is_empty());
+
+        let flac = find_by_id("flac").expect("flac");
+        assert!(flac.audio_bitrates.is_empty());
+
+        let png = find_by_id("png").expect("png");
+        assert_eq!(png.image_sides, IMAGE_SIDES);
+        assert!(png.audio_bitrates.is_empty());
+
+        let ico = find_by_id("ico").expect("ico");
+        assert!(ico.image_sides.is_empty());
+    }
+
+    #[test]
+    fn gif_accepts_image_size_and_video_accepts_audio_targets() {
+        let gif = find_by_id("gif").expect("gif");
+        assert!(!gif.image_sides.is_empty());
+
+        let video_targets = targets_for(Category::Video);
+        assert!(video_targets.iter().any(|format| format.id == "mp3"));
+        assert!(video_targets.iter().any(|format| format.id == "gif"));
     }
 }

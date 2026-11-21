@@ -22,6 +22,12 @@ pub struct ConvertRequest {
     pub preserve_metadata: bool,
     #[serde(default)]
     pub overwrite: bool,
+    #[serde(default)]
+    pub video_height: Option<u32>,
+    #[serde(default)]
+    pub image_max_side: Option<u32>,
+    #[serde(default)]
+    pub audio_bitrate: Option<u32>,
 }
 
 fn default_quality() -> u8 {
@@ -108,6 +114,47 @@ fn bitrate_kbps(quality: u8) -> u32 {
     64 + (quality.clamp(1, 100) as u32 * 192 / 100)
 }
 
+/// `1080p` limita el lado corto, así que el vídeo vertical conserva su
+/// orientación y no se amplía si ya es más pequeño.
+fn video_scale_filter(height: u32) -> String {
+    format!(
+        "scale=w='if(gt(iw,ih),-2,min(iw,{height}))':h='if(gt(iw,ih),min(ih,{height}),-2)':flags=lanczos"
+    )
+}
+
+/// Caja cuadrada: limita el lado mayor y nunca amplía la imagen.
+fn image_box_filter(side: u32) -> String {
+    format!(
+        "scale=w='min(iw,{side})':h='min(ih,{side})':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos"
+    )
+}
+
+fn validate_options(target: &formats::FormatDef, request: &ConvertRequest) -> Result<(), String> {
+    if let Some(height) = request.video_height {
+        if !target.video_heights.contains(&height) {
+            return Err(
+                "La resolución de vídeo seleccionada no es válida para este formato.".to_string(),
+            );
+        }
+    }
+
+    if let Some(side) = request.image_max_side {
+        if !target.image_sides.contains(&side) {
+            return Err(
+                "El tamaño de imagen seleccionado no es válido para este formato.".to_string(),
+            );
+        }
+    }
+
+    if let Some(rate) = request.audio_bitrate {
+        if !target.audio_bitrates.contains(&rate) {
+            return Err("El bitrate seleccionado no es válido para este formato.".to_string());
+        }
+    }
+
+    Ok(())
+}
+
 fn build_ffmpeg(
     command: &mut Command,
     input: &Path,
@@ -137,11 +184,18 @@ fn build_ffmpeg(
 
     if audio_targets.contains(&target_id) {
         command.arg("-vn");
+        let bitrate = request.audio_bitrate.map(|value| format!("{value}k"));
+
         match target_id {
             "mp3" => {
-                command
-                    .args(["-c:a", "libmp3lame", "-q:a"])
-                    .arg(audio_quality(request.quality).to_string());
+                command.args(["-c:a", "libmp3lame"]);
+                if let Some(value) = bitrate.as_deref() {
+                    command.args(["-b:a", value]);
+                } else {
+                    command
+                        .args(["-q:a"])
+                        .arg(audio_quality(request.quality).to_string());
+                }
             }
             "wav" => {
                 command.args(["-c:a", "pcm_s16le"]);
@@ -150,31 +204,42 @@ fn build_ffmpeg(
                 command.args(["-c:a", "flac"]);
             }
             "ogg" => {
-                command
-                    .args(["-c:a", "libvorbis", "-q:a"])
-                    .arg(audio_quality(request.quality).to_string());
+                command.args(["-c:a", "libvorbis"]);
+                if let Some(value) = bitrate.as_deref() {
+                    command.args(["-b:a", value]);
+                } else {
+                    command
+                        .args(["-q:a"])
+                        .arg(audio_quality(request.quality).to_string());
+                }
             }
             "opus" => {
-                command
-                    .args(["-c:a", "libopus", "-b:a"])
-                    .arg(format!("{}k", bitrate_kbps(request.quality)));
+                command.args(["-c:a", "libopus", "-b:a"]).arg(
+                    bitrate.unwrap_or_else(|| format!("{}k", bitrate_kbps(request.quality))),
+                );
             }
             "aac" | "m4a" | "m4b" => {
-                command
-                    .args(["-c:a", "aac", "-b:a"])
-                    .arg(format!("{}k", bitrate_kbps(request.quality)));
+                command.args(["-c:a", "aac", "-b:a"]).arg(
+                    bitrate.unwrap_or_else(|| format!("{}k", bitrate_kbps(request.quality))),
+                );
             }
             "wma" => {
-                command.args(["-c:a", "wmav2", "-b:a", "192k"]);
+                command
+                    .args(["-c:a", "wmav2", "-b:a"])
+                    .arg(bitrate.unwrap_or_else(|| "192k".to_string()));
             }
             "aiff" => {
                 command.args(["-c:a", "pcm_s16be"]);
             }
             "ac3" => {
-                command.args(["-c:a", "ac3", "-b:a", "192k"]);
+                command
+                    .args(["-c:a", "ac3", "-b:a"])
+                    .arg(bitrate.unwrap_or_else(|| "192k".to_string()));
             }
             "dts" => {
-                command.args(["-c:a", "dca", "-strict", "-2", "-b:a", "768k"]);
+                command
+                    .args(["-c:a", "dca", "-strict", "-2", "-b:a"])
+                    .arg(bitrate.unwrap_or_else(|| "768k".to_string()));
             }
             "amr" => {
                 command
@@ -199,13 +264,23 @@ fn build_ffmpeg(
     }
 
     if target_id == "gif" {
+        let filter = format!(
+            "fps=15,{}",
+            image_box_filter(request.image_max_side.unwrap_or(1280))
+        );
         command
-            .args(["-an", "-vf", "fps=15,scale=1280:-2:flags=lanczos", "-loop", "0"])
+            .args(["-an", "-vf"])
+            .arg(filter)
+            .args(["-loop", "0"])
             .arg(output);
         return;
     }
 
     let crf = quality_to_crf(request.quality).to_string();
+
+    if let Some(height) = request.video_height {
+        command.args(["-vf"]).arg(video_scale_filter(height));
+    }
 
     match target_id {
         "mp4" | "m4v" | "mov" | "f4v" => {
@@ -280,6 +355,12 @@ fn build_magick(
 ) {
     command.arg(input).arg("-auto-orient");
 
+    if let Some(side) = request.image_max_side {
+        command
+            .arg("-resize")
+            .arg(format!("{side}x{side}>"));
+    }
+
     if !request.preserve_metadata {
         command.arg("-strip");
     }
@@ -297,8 +378,26 @@ fn build_magick(
     command.arg(output);
 }
 
-fn build_vips(command: &mut Command, input: &Path, output: &Path) {
-    command.arg("copy").arg(input).arg(output);
+fn build_vips(
+    command: &mut Command,
+    input: &Path,
+    output: &Path,
+    request: &ConvertRequest,
+) {
+    match request.image_max_side {
+        Some(side) => {
+            let side_text = side.to_string();
+            command
+                .arg("thumbnail")
+                .arg(input)
+                .arg(output)
+                .arg(&side_text)
+                .args(["--height", side_text.as_str(), "--size", "down"]);
+        }
+        None => {
+            command.arg("copy").arg(input).arg(output);
+        }
+    }
 }
 
 fn build_pandoc(command: &mut Command, input: &Path, output: &Path, target_id: &str) {
@@ -399,6 +498,8 @@ pub async fn convert(
         ));
     }
 
+    validate_options(&target, &request)?;
+
     let engine_id = choose_engine(app, input_format.category, &target.id)?;
     let tool = engines::resolve(app, engine_id)
         .ok_or_else(|| format!("No se encontró el motor «{engine_id}»."))?;
@@ -463,7 +564,7 @@ pub async fn convert(
             duration = probe_duration(app, &input).await;
         }
         engines::MAGICK => build_magick(&mut command, &input, &temp_output, &target.id, &request),
-        engines::VIPS => build_vips(&mut command, &input, &temp_output),
+        engines::VIPS => build_vips(&mut command, &input, &temp_output, &request),
         engines::PANDOC => build_pandoc(&mut command, &input, &temp_output, &target.id),
         _ => return Err("Motor de conversión desconocido.".to_string()),
     }
@@ -639,5 +740,124 @@ mod tests {
         assert_eq!(quality_to_crf(1), 35);
         assert_eq!(quality_to_crf(100), 15);
         assert!(quality_to_crf(80) < quality_to_crf(30));
+    }
+
+    fn request(
+        video_height: Option<u32>,
+        image_max_side: Option<u32>,
+        audio_bitrate: Option<u32>,
+    ) -> ConvertRequest {
+        ConvertRequest {
+            job_id: "prueba".to_string(),
+            input_path: "entrada.mp4".to_string(),
+            output_dir: String::new(),
+            target_format: "mp4".to_string(),
+            quality: 80,
+            preserve_metadata: true,
+            overwrite: false,
+            video_height,
+            image_max_side,
+            audio_bitrate,
+        }
+    }
+
+    #[test]
+    fn video_filter_limits_the_short_side_without_upscaling() {
+        assert_eq!(
+            video_scale_filter(720),
+            "scale=w='if(gt(iw,ih),-2,min(iw,720))':h='if(gt(iw,ih),min(ih,720),-2)':flags=lanczos"
+        );
+        assert_eq!(
+            image_box_filter(1280),
+            "scale=w='min(iw,1280)':h='min(ih,1280)':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos"
+        );
+    }
+
+    #[test]
+    fn validates_options_against_the_target_format() {
+        let mp4 = formats::find_by_id("mp4").expect("mp4");
+        assert!(validate_options(&mp4, &request(Some(720), None, None)).is_ok());
+        assert!(validate_options(&mp4, &request(Some(999), None, None)).is_err());
+        assert!(validate_options(&mp4, &request(None, Some(1920), None)).is_err());
+        assert!(validate_options(&mp4, &request(None, None, Some(128))).is_err());
+
+        let mp3 = formats::find_by_id("mp3").expect("mp3");
+        assert!(validate_options(&mp3, &request(None, None, Some(128))).is_ok());
+        assert!(validate_options(&mp3, &request(None, None, Some(123))).is_err());
+        assert!(validate_options(&mp3, &request(Some(720), None, None)).is_err());
+
+        let png = formats::find_by_id("png").expect("png");
+        assert!(validate_options(&png, &request(None, Some(1920), None)).is_ok());
+        assert!(validate_options(&png, &request(None, Some(1000), None)).is_err());
+    }
+
+    fn args_of(command: &Command) -> Vec<String> {
+        command
+            .as_std()
+            .get_args()
+            .map(|value| value.to_string_lossy().to_string())
+            .collect()
+    }
+
+    #[test]
+    fn builds_video_and_audio_options_into_ffmpeg() {
+        let mut video = Command::new("ffmpeg");
+        build_ffmpeg(
+            &mut video,
+            Path::new("entrada.mp4"),
+            Path::new("salida.mp4"),
+            "mp4",
+            &request(Some(720), None, None),
+        );
+        let video_args = args_of(&video);
+        assert!(video_args
+            .windows(2)
+            .any(|pair| pair[0] == "-vf" && pair[1] == video_scale_filter(720)));
+
+        let mut audio = Command::new("ffmpeg");
+        build_ffmpeg(
+            &mut audio,
+            Path::new("entrada.wav"),
+            Path::new("salida.mp3"),
+            "mp3",
+            &request(None, None, Some(128)),
+        );
+        let audio_args = args_of(&audio);
+        assert!(audio_args
+            .windows(2)
+            .any(|pair| pair[0] == "-b:a" && pair[1] == "128k"));
+        assert!(!audio_args.iter().any(|arg| arg == "-q:a"));
+    }
+
+    #[test]
+    fn builds_image_size_options_into_magick_and_vips() {
+        let mut magick = Command::new("magick");
+        build_magick(
+            &mut magick,
+            Path::new("entrada.png"),
+            Path::new("salida.jpg"),
+            "jpg",
+            &request(None, Some(1920), None),
+        );
+        let magick_args = args_of(&magick);
+        assert!(magick_args
+            .windows(2)
+            .any(|pair| pair[0] == "-resize" && pair[1] == "1920x1920>"));
+
+        let mut vips = Command::new("vips");
+        build_vips(
+            &mut vips,
+            Path::new("entrada.png"),
+            Path::new("salida.jpg"),
+            &request(None, Some(1920), None),
+        );
+        let vips_args = args_of(&vips);
+        assert_eq!(vips_args.first().map(String::as_str), Some("thumbnail"));
+        assert!(vips_args
+            .windows(2)
+            .any(|pair| pair[0] == "--height" && pair[1] == "1920"));
+        assert!(vips_args
+            .windows(2)
+            .any(|pair| pair[0] == "--size" && pair[1] == "down"));
     }
 }

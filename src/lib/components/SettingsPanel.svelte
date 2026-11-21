@@ -73,7 +73,7 @@
       <span>Mayor calidad</span>
     </div>
     <p class="mt-2 text-[10px] leading-relaxed text-muted">
-      Se aplica a imágenes y a la codificación de audio/vídeo. Los documentos no se ven afectados.
+      Se aplica a imágenes y a audio/vídeo (los documentos no). La resolución, el tamaño y el bitrate se eligen por archivo.
     </p>
   </section>
 

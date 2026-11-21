@@ -36,6 +36,18 @@ report() {
   fi
 }
 
+check_value() {
+  local label="$1" actual="$2" expected="$3"
+  if [ "$actual" = "$expected" ]; then
+    pass=$((pass + 1))
+    printf '  ok   %s (%s)\n' "$label" "$actual"
+  else
+    fail=$((fail + 1))
+    failed_list+=("$label")
+    printf '  FAIL %s (esperado %s, obtenido %s)\n' "$label" "$expected" "$actual"
+  fi
+}
+
 # ---------- Muestras ----------
 "$MAGICK" -size 640x360 gradient:'#f97316-#171412' -quality 92 "$IN/imagen.png" 2>/dev/null
 "$FFMPEG" -hide_banner -loglevel error -y -f lavfi -i "sine=frequency=440:duration=2" "$IN/audio.wav"
@@ -43,6 +55,12 @@ report() {
   -f lavfi -i "testsrc2=size=640x360:rate=25:duration=3" \
   -f lavfi -i "sine=frequency=440:duration=3" \
   -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest "$IN/video.mp4"
+"$FFMPEG" -hide_banner -loglevel error -y \
+  -f lavfi -i "testsrc2=size=1920x1080:rate=25:duration=1" \
+  -c:v libx264 -pix_fmt yuv420p "$IN/video-hd.mp4"
+"$FFMPEG" -hide_banner -loglevel error -y \
+  -f lavfi -i "testsrc2=size=1080x1920:rate=25:duration=1" \
+  -c:v libx264 -pix_fmt yuv420p "$IN/video-vertical.mp4"
 cat > "$IN/documento.md" <<'MD'
 # ConvertAll
 
@@ -127,6 +145,48 @@ out="$OUT/video.gif"
 "$FFMPEG" -hide_banner -loglevel error -y -i "$IN/video.mp4" -progress pipe:1 -nostats \
   -map_metadata -1 -an -vf "fps=15,scale=1280:-2:flags=lanczos" -loop 0 "$out" >/dev/null 2>&1
 report $? "video.mp4 -> gif" "$out"
+
+echo
+echo "== Opciones por formato =="
+
+video_hd_out="$OUT/video-hd-720.mp4"
+"$FFMPEG" -hide_banner -loglevel error -y -i "$IN/video-hd.mp4" -progress pipe:1 -nostats \
+  -map_metadata -1 \
+  -vf "scale=w='if(gt(iw,ih),-2,min(iw,720))':h='if(gt(iw,ih),min(ih,720),-2)':flags=lanczos" \
+  -c:v libx264 -preset medium -crf 24 -pix_fmt yuv420p -movflags +faststart "$video_hd_out" >/dev/null 2>&1
+check_value "video 1920x1080 -> 720p" \
+  "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x "$video_hd_out")" \
+  "1280x720"
+
+video_vertical_out="$OUT/video-vertical-720.mp4"
+"$FFMPEG" -hide_banner -loglevel error -y -i "$IN/video-vertical.mp4" -progress pipe:1 -nostats \
+  -map_metadata -1 \
+  -vf "scale=w='if(gt(iw,ih),-2,min(iw,720))':h='if(gt(iw,ih),min(ih,720),-2)':flags=lanczos" \
+  -c:v libx264 -preset medium -crf 24 -pix_fmt yuv420p -movflags +faststart "$video_vertical_out" >/dev/null 2>&1
+check_value "vídeo vertical 1080x1920 -> 720p" \
+  "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x "$video_vertical_out")" \
+  "720x1280"
+
+image_opt="$OUT/imagen-480.jpg"
+"$MAGICK" "$IN/imagen.png" -auto-orient -resize "480x480>" -strip -quality 80 "$image_opt" >/dev/null 2>&1
+check_value "imagen 640x360 -> 480 px" \
+  "$("$MAGICK" identify -format '%wx%h' "$image_opt")" "480x270"
+
+audio_opt="$OUT/audio-128k.mp3"
+"$FFMPEG" -hide_banner -loglevel error -y -i "$IN/audio.wav" -progress pipe:1 -nostats \
+  -map_metadata -1 -vn -c:a libmp3lame -b:a 128k "$audio_opt" >/dev/null 2>&1
+check_value "audio.wav -> 128 kbps" \
+  "$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate -of default=nw=1:nk=1 "$audio_opt")" \
+  "128000"
+
+gif_opt="$OUT/video-640.gif"
+"$FFMPEG" -hide_banner -loglevel error -y -i "$IN/video.mp4" -progress pipe:1 -nostats \
+  -map_metadata -1 -an \
+  -vf "fps=15,scale=w='min(iw,640)':h='min(ih,640)':force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos" \
+  -loop 0 "$gif_opt" >/dev/null 2>&1
+check_value "video -> gif 640 px" \
+  "$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x "$gif_opt")" \
+  "640x360"
 
 echo
 echo "== Documentos (Pandoc) =="

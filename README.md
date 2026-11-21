@@ -14,23 +14,31 @@ La interfaz está construida con **Tauri 2 + Svelte 5 + Tailwind CSS 4** y el ba
 
 ## Estado
 
-Proyecto en fase **M1**: shell funcional, detección de motores, cola de archivos, selección de formato, progreso, cancelación y conversión local.
+Proyecto en fase **M1**: shell funcional, detección de motores, cola de archivos, selección de formato y ajustes por archivo, progreso, cancelación y conversión local.
 
 Verificado en Linux y Windows:
 
 - `svelte-check` sin errores, build de Vite y `cargo check` correctos.
-- 14 pruebas Rust correctas.
-- 77 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
-- 4 archivos convertidos desde la GUI y desde el AppImage (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
+- 20 pruebas Rust correctas.
+- 82 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
+- 4 archivos convertidos desde la GUI y desde el AppImage con resolución, tamaño y bitrate (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
 - El AppImage aísla los motores de sus propias bibliotecas para que libvips e ImageMagick usen las del sistema.
 - Paquete portable de Windows (`.zip`) con FFmpeg, Pandoc e ImageMagick incluidos.
 - Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
 - La app arranca y detecta FFmpeg, ImageMagick, libvips y Pandoc.
 
+### Ajustes por archivo
+
+Cada archivo muestra solo las opciones válidas para su formato de destino:
+
+- **Vídeo:** 2160p, 1440p, 1080p, 720p, 480p y 360p. Limita el lado corto y no amplía el vídeo.
+- **Imagen:** lado mayor entre 3840 y 480 px. No amplía la imagen; ICO y CUR mantienen sus tamaños de icono.
+- **Audio:** bitrate según el códec (MP3, AAC/M4A, Opus, Vorbis, WMA, AC-3 y DTS). «Automático» usa la calidad global.
+
 Pendiente:
 
 - Office/PDF de alta fidelidad con LibreOffice (fase 2).
-- Presets, perfiles y más ajustes por formato.
+- Presets y perfiles reutilizables; más ajustes por formato (códec, FPS, canales).
 
 ## Descargas
 

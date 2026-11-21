@@ -13,7 +13,7 @@
     X,
   } from "@lucide/svelte";
   import type { FormatDef } from "../types";
-  import type { QueueItem } from "../queue";
+  import type { QueueItem, QueueOptionPatch } from "../queue";
   import { categoryLabel, formatSize, statusLabel } from "../format";
 
   let {
@@ -24,6 +24,7 @@
     onCancel,
     onOpen,
     onTargetChange,
+    onOptionsChange,
   }: {
     item: QueueItem;
     targets: FormatDef[];
@@ -32,6 +33,7 @@
     onCancel: (id: string) => void;
     onOpen: (path: string) => void;
     onTargetChange: (id: string, target: string) => void;
+    onOptionsChange: (id: string, patch: QueueOptionPatch) => void;
   } = $props();
 
   const isBusy = $derived(item.status === "converting");
@@ -41,6 +43,28 @@
       item.engineAvailable &&
       targets.some((format) => format.id === item.target),
   );
+  const selectedTarget = $derived(
+    targets.find((format) => format.id === item.target),
+  );
+  const optionsDisabled = $derived(isBusy || item.status === "done");
+  const hasOptions = $derived(
+    !!selectedTarget &&
+      (selectedTarget.videoHeights.length > 0 ||
+        selectedTarget.imageSides.length > 0 ||
+        selectedTarget.audioBitrates.length > 0),
+  );
+
+  function videoLabel(height: number): string {
+    const labels: Record<number, string> = {
+      2160: "2160p (4K)",
+      1440: "1440p (2K)",
+      1080: "1080p",
+      720: "720p",
+      480: "480p",
+      360: "360p",
+    };
+    return labels[height] ?? `${height}p`;
+  }
 
   function statusToneClass(status: QueueItem["status"]): string {
     switch (status) {
@@ -162,6 +186,87 @@
           </button>
         {/if}
       </div>
+
+      {#if selectedTarget && hasOptions}
+        <div
+          class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line/60 pt-2"
+        >
+          {#if selectedTarget.videoHeights.length > 0}
+            <label
+              class="flex items-center gap-1.5 text-[10px] text-muted"
+              title="Limita el lado corto. No se amplía el vídeo."
+            >
+              Resolución
+              <select
+                value={item.videoHeight ?? ""}
+                onchange={(event) => {
+                  const value = event.currentTarget.value;
+                  onOptionsChange(item.id, {
+                    videoHeight: value ? Number(value) : undefined,
+                  });
+                }}
+                disabled={optionsDisabled}
+                class="h-7 rounded-md border border-line bg-panel-2 px-1.5 text-[11px] text-ink transition-colors hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">Original</option>
+                {#each selectedTarget.videoHeights as height (height)}
+                  <option value={height}>{videoLabel(height)}</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+
+          {#if selectedTarget.imageSides.length > 0}
+            <label
+              class="flex items-center gap-1.5 text-[10px] text-muted"
+              title="Limita el lado mayor. No se amplía la imagen."
+            >
+              Tamaño
+              <select
+                value={item.imageMaxSide ?? ""}
+                onchange={(event) => {
+                  const value = event.currentTarget.value;
+                  onOptionsChange(item.id, {
+                    imageMaxSide: value ? Number(value) : undefined,
+                  });
+                }}
+                disabled={optionsDisabled}
+                class="h-7 rounded-md border border-line bg-panel-2 px-1.5 text-[11px] text-ink transition-colors hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">Original</option>
+                {#each selectedTarget.imageSides as side (side)}
+                  <option value={side}>{side} px</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+
+          {#if selectedTarget.audioBitrates.length > 0}
+            <label
+              class="flex items-center gap-1.5 text-[10px] text-muted"
+              title="Si eliges un bitrate, prevalece sobre el control de calidad."
+            >
+              Bitrate
+              <select
+                value={item.audioBitrate ?? ""}
+                onchange={(event) => {
+                  const value = event.currentTarget.value;
+                  onOptionsChange(item.id, {
+                    audioBitrate: value ? Number(value) : undefined,
+                  });
+                }}
+                disabled={optionsDisabled}
+                class="h-7 rounded-md border border-line bg-panel-2 px-1.5 text-[11px] text-ink transition-colors hover:border-accent/40 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">Automático</option>
+                {#each selectedTarget.audioBitrates as rate (rate)}
+                  <option value={rate}>{rate} kbps</option>
+                {/each}
+              </select>
+            </label>
+          {/if}
+        </div>
+      {/if}
 
       {#if item.status === "converting"}
         <div

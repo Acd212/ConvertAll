@@ -1,15 +1,7 @@
 <script lang="ts">
-  import {
-    AlertTriangle,
-    CheckCircle2,
-    FolderOpen,
-    Moon,
-    ShieldCheck,
-    Sun,
-  } from "@lucide/svelte";
+  import { AlertTriangle, FolderOpen } from "@lucide/svelte";
   import type { EngineInfo } from "../types";
-
-  type Theme = "dark" | "light";
+  import { visibleEngines } from "../engines";
 
   let {
     engines,
@@ -18,7 +10,6 @@
     preserveMetadata = $bindable(true),
     overwrite = $bindable(false),
     openAfter = $bindable(true),
-    theme = $bindable("dark" as Theme),
     pandocMissing = false,
     onPickOutput,
   }: {
@@ -28,18 +19,11 @@
     preserveMetadata?: boolean;
     overwrite?: boolean;
     openAfter?: boolean;
-    theme?: Theme;
     pandocMissing?: boolean;
     onPickOutput: () => void;
   } = $props();
 
-  function isOptional(engine: EngineInfo): boolean {
-    return (
-      engine.id === "vips" &&
-      !engine.available &&
-      engines.some((item) => item.id === "magick" && item.available)
-    );
-  }
+  const displayed = $derived(visibleEngines(engines));
 </script>
 
 <aside class="space-y-3">
@@ -127,52 +111,14 @@
   </section>
 
   <section class="rounded-xl border border-line bg-panel p-4">
-    <div class="flex items-center justify-between">
-      <h2 class="text-xs font-semibold uppercase tracking-wider text-muted">Apariencia</h2>
-      <div class="flex rounded-lg border border-line bg-panel-2 p-0.5">
-        <button
-          type="button"
-          onclick={() => (theme = "dark")}
-          class="grid h-6 w-7 place-items-center rounded-md transition-colors"
-          class:bg-panel={theme === "dark"}
-          class:text-accent={theme === "dark"}
-          class:text-muted={theme !== "dark"}
-          title="Tema oscuro"
-          aria-label="Tema oscuro"
-          aria-pressed={theme === "dark"}
-        >
-          <Moon size={13} strokeWidth={2} />
-        </button>
-        <button
-          type="button"
-          onclick={() => (theme = "light")}
-          class="grid h-6 w-7 place-items-center rounded-md transition-colors"
-          class:bg-panel={theme === "light"}
-          class:text-accent={theme === "light"}
-          class:text-muted={theme !== "light"}
-          title="Tema claro"
-          aria-label="Tema claro"
-          aria-pressed={theme === "light"}
-        >
-          <Sun size={13} strokeWidth={2} />
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <section class="rounded-xl border border-line bg-panel p-4">
     <h2 class="text-xs font-semibold uppercase tracking-wider text-muted">Motores</h2>
     <div class="mt-3 space-y-2">
-      {#each engines as engine (engine.id)}
+      {#each displayed as engine (engine.id)}
         <div class="flex items-center justify-between gap-2">
           <span class="flex items-center gap-2 text-[11px] text-ink">
             <span
               class={`h-1.5 w-1.5 rounded-full ${
-                engine.available
-                  ? "bg-success"
-                  : isOptional(engine)
-                    ? "bg-muted/40"
-                    : "bg-danger"
+                engine.available ? "bg-success" : "bg-danger"
               }`}
             ></span>
             {engine.name}
@@ -181,15 +127,9 @@
             class="max-w-[150px] truncate text-[10px] text-muted"
             title={engine.available
               ? (engine.version ?? engine.path ?? "")
-              : isOptional(engine)
-                ? "Opcional: ImageMagick está disponible"
-                : "No disponible"}
+              : "No disponible"}
           >
-            {engine.available
-              ? (engine.version ?? "Disponible")
-              : isOptional(engine)
-                ? "No necesario"
-                : "No disponible"}
+            {engine.available ? (engine.version ?? "Disponible") : "No disponible"}
           </span>
         </div>
       {/each}
@@ -204,26 +144,9 @@
           <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">sudo apt install pandoc</code>
           o
           <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">sudo pacman -S pandoc</code>).
-          En Windows viene incluido en el instalador.
+          En Windows viene incluido en el paquete portable.
         </span>
       </div>
     {/if}
-  </section>
-
-  <section class="rounded-xl border border-line bg-panel p-4">
-    <div class="flex gap-2.5">
-      <ShieldCheck size={16} class="mt-0.5 shrink-0 text-success" strokeWidth={1.9} />
-      <div>
-        <h2 class="text-xs font-semibold text-ink">100 % local</h2>
-        <p class="mt-1 text-[10px] leading-relaxed text-muted">
-          Los archivos se procesan en tu equipo con FFmpeg, ImageMagick, libvips y Pandoc.
-          No hay subidas, cuentas ni telemetría.
-        </p>
-      </div>
-    </div>
-    <div class="mt-3 flex items-center gap-1.5 text-[10px] text-success">
-      <CheckCircle2 size={12} strokeWidth={2.2} />
-      Sin límites de tamaño impuestos por la app
-    </div>
   </section>
 </aside>

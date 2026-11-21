@@ -75,12 +75,41 @@ jobs:
         run: ./scripts/fetch-tools-windows.ps1
 
       - name: Compilar
-        run: bunx tauri build --ci --bundles nsis
+        run: bunx tauri build --ci --no-bundle
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}\cache\cargo-target
+
+      - name: Crear paquete portable
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $stage = "cache/portable/ConvertAll"
+          New-Item -ItemType Directory -Force -Path "$stage/tools", "$stage/licenses" | Out-Null
+
+          Copy-Item "cache/cargo-target/release/convertall.exe" "$stage/ConvertAll.exe"
+          Copy-Item "src-tauri/resources/windows/ffmpeg.exe" "$stage/tools/"
+          Copy-Item "src-tauri/resources/windows/ffprobe.exe" "$stage/tools/"
+          Copy-Item "src-tauri/resources/windows/pandoc.exe" "$stage/tools/"
+          Copy-Item "src-tauri/resources/windows/magick" "$stage/tools/magick" -Recurse
+          Copy-Item "src-tauri/resources/windows/licenses/*" "$stage/licenses/" -Recurse
+
+          @"
+          ConvertAll $version (portable)
+
+          No requiere instalación.
+
+          1. Descomprime este ZIP en una carpeta.
+          2. Ejecuta ConvertAll.exe.
+          3. No muevas la carpeta tools: contiene FFmpeg, Pandoc e ImageMagick.
+
+          Puedes crear un acceso directo a ConvertAll.exe.
+          WebView2 es necesario (incluido en Windows 11 y en la mayoría de Windows 10).
+          "@ | Set-Content -Path "$stage/LEEME.txt" -Encoding UTF8
+
+          Compress-Archive -Path "$stage/*" -DestinationPath "cache/portable/ConvertAll_${version}_x64-portable.zip" -Force
 
       - uses: actions/upload-artifact@v4
         with:
           name: convertall-windows
-          path: cache/cargo-target/release/bundle/nsis/*.exe
+          path: cache/portable/*.zip
           if-no-files-found: error

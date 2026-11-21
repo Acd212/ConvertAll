@@ -586,7 +586,6 @@
           bind:preserveMetadata
           bind:overwrite
           bind:openAfter
-          bind:theme
           {pandocMissing}
           onPickOutput={pickOutputDir}
         />

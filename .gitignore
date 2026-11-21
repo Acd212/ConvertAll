@@ -15,6 +15,9 @@ src-tauri/resources/windows/*
 *.pem
 *.key
 
+# Contexto local (no se publica)
+CONTEXTO.md
+
 # Sistema y editores
 .DS_Store
 Thumbs.db

@@ -104,6 +104,7 @@ jobs:
 
           Puedes crear un acceso directo a ConvertAll.exe.
           WebView2 es necesario (incluido en Windows 11 y en la mayoría de Windows 10).
+          Si falta: https://developer.microsoft.com/microsoft-edge/webview2/
           "@ | Set-Content -Path "$stage/LEEME.txt" -Encoding UTF8
 
           Compress-Archive -Path "$stage/*" -DestinationPath "cache/portable/ConvertAll_${version}_x64-portable.zip" -Force

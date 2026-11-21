@@ -41,6 +41,8 @@ A partir de **v0.1.2** se mantiene una sola release con la última versión: [Re
 
 Las versiones nuevas reemplazan los archivos de esa misma release; no se crea una entrada de release por versión. Ya no se publican MSI, NSIS ni DEB.
 
+En Windows, el zip necesita WebView2. Windows 11 lo incluye y la mayoría de Windows 10 también; si falta, instálalo desde [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/).
+
 El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips y Pandoc) sí siguen siendo del sistema.
 
 ## Requisitos de desarrollo

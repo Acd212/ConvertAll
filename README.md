@@ -51,6 +51,20 @@ Pendiente:
 
 - Presets y perfiles reutilizables; más ajustes por formato (códec, FPS, canales).
 
+### Limitaciones con PDF
+
+**PDF solo se puede usar como destino (salida), no como archivo de entrada.**
+
+ConvertAll puede exportar documentos de Office, texto e imágenes a PDF, pero **no puede abrir un PDF para convertirlo a Word (.doc/.docx), PowerPoint (.ppt/.pptx) ni Excel (.xls/.xlsx)**.
+
+**¿Por qué?**
+La importación de PDF en LibreOffice (el motor que usa ConvertAll para Office) trata el PDF como un dibujo o objeto gráfico, no como un documento con texto, tablas, celdas o diapositivas editables. El resultado no sería fiable: perderías formato, tablas, posiciones y no podrías editar el contenido como esperas en un archivo de Office.
+
+**Alternativa**
+Si necesitas convertir un PDF a un documento Office editable con fidelidad, tendrías que usar herramientas externas (por ejemplo, Adobe Acrobat o conversores especializados) antes de traer el archivo a ConvertAll. Esta limitación se mantiene intencionada para que la app siga siendo **100 % local, ligera y sin dependencias pesadas**.
+
+Exportar **a** PDF desde otros formatos sí funciona normalmente.
+
 ## Descargas
 
 A partir de **v0.1.2** se mantiene una sola release con la última versión: [Releases](https://github.com/Acd212/ConvertAll/releases/latest).

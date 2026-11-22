@@ -43,6 +43,9 @@
   let engines = $state<EngineInfo[]>([]);
   let catalog = $state<FormatDef[]>([]);
   let targets = $state<Record<Category, FormatDef[]>>(emptyTargets());
+  // Destinos válidos por formato de entrada (docx, xlsx, pptx…). Se cargan
+  // al añadir archivos y al refrescar los motores.
+  let targetsByInput = $state<Record<string, FormatDef[]>>({});
   let items = $state<QueueItem[]>([]);
   let outputDir = $state("");
   let quality = $state(80);
@@ -71,14 +74,20 @@
     engines.length > 0 &&
       !engines.some((engine) => engine.id === "pandoc" && engine.available),
   );
+  const officeMissing = $derived(
+    engines.length > 0 &&
+      !engines.some(
+        (engine) =>
+          (engine.id === "libreoffice" || engine.id === "msoffice") &&
+          engine.available,
+      ),
+  );
   const canStart = $derived(
     items.some(
       (item) =>
         (item.status === "pending" || item.status === "error") &&
         item.target.length > 0 &&
-        (targets[item.category] ?? []).some(
-          (format) => format.id === item.target,
-        ),
+        targetsFor(item).some((format) => format.id === item.target),
     ),
   );
 
@@ -151,6 +160,25 @@
         ...emptyTargets(),
         ...(Object.fromEntries(entries) as Record<Category, FormatDef[]>),
       };
+
+      const refreshedInputs: Record<string, FormatDef[]> = {};
+      const formatIds = [...new Set(items.map((item) => item.formatId))];
+      await Promise.all(
+        formatIds.map(async (formatId) => {
+          const item = items.find((value) => value.formatId === formatId);
+          if (!item) return;
+          try {
+            refreshedInputs[formatId] = await api.getTargets(
+              item.category,
+              formatId,
+            );
+          } catch {
+            // Si falla un formato concreto, se conserva la lista anterior.
+          }
+        }),
+      );
+      targetsByInput = { ...targetsByInput, ...refreshedInputs };
+
       showToast("Estado de los motores actualizado.");
     } catch (error) {
       showToast(String(error), "error");
@@ -222,6 +250,33 @@
     if (!unique.length) return;
 
     const results = await inspectInBatches(unique);
+
+    // Se piden los destinos una vez por formato de entrada, no por archivo.
+    const pendingInputs = new Map<string, FileInfo>();
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const info = result.value;
+      if (info.category === "unknown" || !info.formatId) continue;
+      pendingInputs.set(info.formatId, info);
+    }
+
+    const loadedInputs: Record<string, FormatDef[]> = {};
+    await Promise.all(
+      [...pendingInputs.values()].map(async (info) => {
+        try {
+          loadedInputs[info.formatId] = await api.getTargets(
+            info.category,
+            info.formatId,
+          );
+        } catch {
+          // Se usa la lista de la categoría como respaldo.
+        }
+      }),
+    );
+    if (Object.keys(loadedInputs).length > 0) {
+      targetsByInput = { ...targetsByInput, ...loadedInputs };
+    }
+
     const next: QueueItem[] = [];
     let skipped = 0;
 
@@ -232,12 +287,17 @@
       }
 
       const info = result.value;
-      const availableTargets = targets[info.category] ?? [];
 
       if (info.category === "unknown") {
         skipped += 1;
         continue;
       }
+
+      const availableTargets =
+        loadedInputs[info.formatId] ??
+        targetsByInput[info.formatId] ??
+        targets[info.category] ??
+        [];
 
       const target = availableTargets.some(
         (format) => format.id === info.suggestedTarget,
@@ -328,9 +388,7 @@
 
     item.target = target;
 
-    const format = (targets[item.category] ?? []).find(
-      (value) => value.id === target,
-    );
+    const format = targetsFor(item).find((value) => value.id === target);
     if (
       !format ||
       item.videoHeight === undefined ||
@@ -418,9 +476,7 @@
       (item) =>
         (item.status === "pending" || item.status === "error") &&
         item.target.length > 0 &&
-        (targets[item.category] ?? []).some(
-          (format) => format.id === item.target,
-        ),
+        targetsFor(item).some((format) => format.id === item.target),
     );
 
     if (!queue.length) return;
@@ -482,7 +538,9 @@
   }
 
   function targetsFor(item: QueueItem): FormatDef[] {
-    return targets[item.category] ?? [];
+    return (
+      targetsByInput[item.formatId] ?? targets[item.category] ?? []
+    );
   }
 </script>
 
@@ -556,7 +614,7 @@
                 <Zap size={18} class="text-accent" strokeWidth={1.9} />
                 <h2 class="mt-3 text-xs font-semibold">Motores nativos</h2>
                 <p class="mt-1 text-[11px] leading-relaxed text-muted">
-                  FFmpeg, ImageMagick, libvips y Pandoc, sin las limitaciones de un navegador.
+                  FFmpeg, ImageMagick, libvips, Pandoc y LibreOffice (o Microsoft Office en Windows), sin las limitaciones de un navegador.
                 </p>
               </article>
               <article class="rounded-xl border border-line bg-panel p-4">
@@ -623,6 +681,7 @@
           bind:overwrite
           bind:openAfter
           {pandocMissing}
+          {officeMissing}
           onPickOutput={pickOutputDir}
         />
       </div>

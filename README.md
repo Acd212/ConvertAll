@@ -6,7 +6,8 @@ Usa motores nativos en lugar de WebAssembly:
 
 - **FFmpeg** para audio y vídeo.
 - **ImageMagick** y **libvips** para imágenes.
-- **Pandoc** para documentos.
+- **Pandoc** para documentos de marcado.
+- **LibreOffice** del sistema para Office y PDF. En Windows, si **Microsoft Office** está instalado, se usa automáticamente para Word, Excel y PowerPoint.
 
 La interfaz está construida con **Tauri 2 + Svelte 5 + Tailwind CSS 4** y el backend con **Rust**.
 
@@ -14,18 +15,19 @@ La interfaz está construida con **Tauri 2 + Svelte 5 + Tailwind CSS 4** y el ba
 
 ## Estado
 
-Proyecto en fase **M1**: shell funcional, detección de motores, cola de archivos, selección de formato y ajustes por archivo, progreso, cancelación y conversión local.
+Proyecto en **fase 2**: shell funcional, detección de motores, cola de archivos, selección de formato y ajustes por archivo, progreso, cancelación y conversión local, con Office/PDF mediante LibreOffice o Microsoft Office.
 
 Verificado en Linux y Windows:
 
 - `svelte-check` sin errores, build de Vite y `cargo check` correctos.
-- 20 pruebas Rust correctas.
+- 32 pruebas Rust correctas.
 - 82 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
 - 4 archivos convertidos desde la GUI y desde el AppImage con resolución, tamaño y bitrate (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
 - El AppImage aísla los motores de sus propias bibliotecas para que libvips e ImageMagick usen las del sistema.
 - Paquete portable de Windows (`.zip`) con FFmpeg, Pandoc e ImageMagick incluidos.
 - Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
-- La app arranca y detecta FFmpeg, ImageMagick, libvips y Pandoc.
+- La app arranca y detecta FFmpeg, ImageMagick, libvips, Pandoc, LibreOffice y Microsoft Office (Windows).
+- El CI de Linux instala LibreOffice y ejecuta `scripts/test-office.sh` (DOCX/DOC/ODT/RTF/TXT/HTML, CSV/XLSX/XLS/ODS, PPTX/PPT/ODP y PDF).
 
 ### Ajustes por archivo
 
@@ -35,9 +37,18 @@ Cada archivo muestra solo las opciones válidas para su formato de destino:
 - **Imagen:** lado mayor entre 3840 y 480 px. No amplía la imagen; ICO y CUR mantienen sus tamaños de icono.
 - **Audio:** bitrate según el códec (MP3, AAC/M4A, Opus, Vorbis, WMA, AC-3 y DTS). «Automático» usa la calidad global.
 
+### Office y PDF
+
+- **Entradas:** DOCX, DOC, ODT, RTF, TXT, HTML, XLSX, XLS, ODS, CSV, PPTX, PPT y ODP.
+- **Salidas:** las mismas familias, más PDF.
+- **PDF es solo salida.** La importación de PDF de LibreOffice produce un dibujo, no un documento editable fiable.
+- Cada archivo muestra únicamente los destinos válidos para su familia: Word, hoja de cálculo o presentación.
+- **Linux:** se usa el LibreOffice del sistema (`soffice` o `libreoffice`). No se empaqueta.
+- **Windows:** se detecta Microsoft Office en el registro y en las rutas habituales. Si Word, Excel o PowerPoint están instalados, se usan para su familia; si no, se recurre a LibreOffice. Tampoco se empaqueta Office.
+- Si no hay ninguno de los dos, la app sigue funcionando: solo se ocultan los destinos de Office/PDF y se muestra un aviso en «Motores».
+
 Pendiente:
 
-- Office/PDF de alta fidelidad con LibreOffice (fase 2).
 - Presets y perfiles reutilizables; más ajustes por formato (códec, FPS, canales).
 
 ## Descargas
@@ -51,14 +62,28 @@ Las versiones nuevas reemplazan los archivos de esa misma release; no se crea un
 
 En Windows, el zip necesita WebView2. Windows 11 lo incluye y la mayoría de Windows 10 también; si falta, instálalo desde [Microsoft Edge WebView2](https://developer.microsoft.com/microsoft-edge/webview2/).
 
-El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips y Pandoc) sí siguen siendo del sistema.
+El AppImage incluye WebKit2GTK 4.1, GTK3 y libsoup, así que no requiere instalar WebKit en el sistema. Los motores (FFmpeg, ImageMagick, libvips, Pandoc y LibreOffice) sí siguen siendo del sistema. En Windows, FFmpeg, Pandoc e ImageMagick van incluidos; LibreOffice y Microsoft Office son opcionales.
+
+### Instalar LibreOffice
+
+En Linux basta con Writer, Calc e Impress:
+
+```bash
+# Debian/Ubuntu
+sudo apt install libreoffice-writer libreoffice-calc libreoffice-impress
+
+# Arch/CachyOS
+sudo pacman -S libreoffice-fresh
+```
+
+En Windows, descárgalo desde [libreoffice.org](https://es.libreoffice.org/descarga/libreoffice/). Si ya tienes Microsoft Office instalado, no necesitas LibreOffice para Word, Excel o PowerPoint.
 
 ## Requisitos de desarrollo
 
 - Rust estable (`rustc`, `cargo`).
 - Bun (o Node 20+ y npm/pnpm).
 - Linux: GTK3, WebKit2GTK 4.1, libsoup3, librsvg, patchelf.
-- Motores: `ffmpeg`, `magick`, `vips` y, opcionalmente, `pandoc`.
+- Motores: `ffmpeg`, `magick`, `vips`, `pandoc` y, para Office/PDF, LibreOffice (`soffice`). Todos son opcionales salvo que se use su categoría.
 
 En CachyOS/Arch:
 
@@ -66,6 +91,8 @@ En CachyOS/Arch:
 sudo pacman -S --needed ffmpeg imagemagick libvips
 # Pandoc no es obligatorio para compilar:
 ./scripts/fetch-pandoc-linux.sh
+# Office/PDF (opcional):
+sudo pacman -S libreoffice-fresh
 ```
 
 ## Desarrollo
@@ -97,7 +124,11 @@ Genera muestras con FFmpeg/ImageMagick y prueba todos los destinos del catálogo
 ./scripts/test-conversions.sh
 ```
 
-Los archivos de prueba se crean en `cache/tmp/samples/`.
+Los archivos de prueba se crean en `cache/tmp/samples/`. Si LibreOffice está instalado, también se ejecutan las pruebas de Office/PDF. Para ejecutarlas por separado:
+
+```bash
+./scripts/test-office.sh
+```
 
 ## Compilar
 
@@ -126,7 +157,7 @@ src/                 Interfaz Svelte
 src/lib/             Tipos, API y componentes
 src-tauri/src/       Backend Rust
   formats.rs         Catálogo y reglas de conversión
-  engines.rs         Detección de FFmpeg/ImageMagick/libvips/Pandoc
+  engines.rs         Detección de FFmpeg/ImageMagick/libvips/Pandoc/LibreOffice/Office
   capabilities.rs    Formatos/codecs reales de cada motor
   convert.rs         Ejecución, progreso y cancelación
   commands.rs        Comandos de Tauri
@@ -140,4 +171,4 @@ cache/               Caché y artefactos (ignorado por git)
 
 MIT. ConvertAll es un proyecto original inspirado en la experiencia de VERT; no reutiliza su código (AGPL-3.0).
 
-Los motores externos conservan sus propias licencias: FFmpeg (GPL/LGPL según build), ImageMagick, libvips (LGPL) y Pandoc (GPL-2.0+). Ver `THIRD_PARTY_LICENSES.md`.
+Los motores externos conservan sus propias licencias: FFmpeg (GPL/LGPL según build), ImageMagick, libvips (LGPL), Pandoc (GPL-2.0+), LibreOffice (MPL-2.0/LGPL) y Microsoft Office (licencia del usuario; no se distribuye). Ver `THIRD_PARTY_LICENSES.md`.

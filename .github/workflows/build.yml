@@ -33,7 +33,13 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             libfuse2t64 \
-            patchelf
+            patchelf \
+            pandoc \
+            libreoffice-writer \
+            libreoffice-calc \
+            libreoffice-impress \
+            fonts-crosextra-carlito \
+            fonts-crosextra-caladea
 
       - name: Instalar dependencias JS
         run: bun install
@@ -44,6 +50,9 @@ jobs:
           cargo test --manifest-path src-tauri/Cargo.toml
         env:
           CARGO_TARGET_DIR: ${{ github.workspace }}/cache/cargo-target
+
+      - name: Pruebas de Office y PDF con LibreOffice
+        run: ./scripts/test-office.sh
 
       - name: Compilar
         run: bunx tauri build --bundles appimage

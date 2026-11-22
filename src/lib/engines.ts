@@ -7,6 +7,8 @@ import type { EngineInfo } from "./types";
 const REPLACEMENTS: Record<string, string> = {
   magick: "vips",
   vips: "magick",
+  libreoffice: "msoffice",
+  msoffice: "libreoffice",
 };
 
 /**

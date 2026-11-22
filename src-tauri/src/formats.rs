@@ -23,6 +23,25 @@ impl Category {
     }
 }
 
+/// Familia documental. Decide qué motor y qué destinos tienen sentido para
+/// una entrada concreta.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocFamily {
+    Word,
+    Sheet,
+    Slide,
+    Markup,
+}
+
+/// Motor que debe ejecutar una conversión.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EngineKind {
+    Ffmpeg,
+    Image,
+    Pandoc,
+    Office,
+}
+
 /// Alturas admitidas para vídeo. `1080p` limita el lado corto a 1080 px,
 /// así que también funciona con vídeo vertical sin ampliarlo.
 pub const VIDEO_HEIGHTS: &[u32] = &[2160, 1440, 1080, 720, 480, 360];
@@ -128,16 +147,22 @@ fn video(id: &str, label: &str) -> FormatDef {
     format(id, label, id, Category::Video, true, true, "ffmpeg")
 }
 
-fn document(id: &str, label: &str) -> FormatDef {
+fn document_pandoc(id: &str, label: &str) -> FormatDef {
     format(id, label, id, Category::Document, true, true, "pandoc")
 }
 
-fn document_read_only(id: &str, label: &str) -> FormatDef {
+fn document_pandoc_read_only(id: &str, label: &str) -> FormatDef {
     format(id, label, id, Category::Document, true, false, "pandoc")
 }
 
-fn document_write_only(id: &str, label: &str) -> FormatDef {
-    format(id, label, id, Category::Document, false, true, "pandoc")
+fn document_office(id: &str, label: &str) -> FormatDef {
+    format(id, label, id, Category::Document, true, true, "office")
+}
+
+fn document_pdf() -> FormatDef {
+    // Se puede escribir, pero no leer: la importación de PDF de LibreOffice
+    // produce un dibujo, no un documento editable fiable.
+    format("pdf", "PDF", "pdf", Category::Document, false, true, "office")
 }
 
 pub fn catalog() -> Vec<FormatDef> {
@@ -213,29 +238,37 @@ pub fn catalog() -> Vec<FormatDef> {
         video("vob", "VOB"),
         video("asf", "ASF"),
         video("f4v", "F4V"),
-        // Documentos
-        document("md", "Markdown"),
-        document("html", "HTML"),
-        document("docx", "Word"),
-        document("odt", "OpenDocument"),
-        document("rtf", "RTF"),
-        document("txt", "Texto plano"),
-        document("rst", "reStructuredText"),
-        document("org", "Org"),
-        document("tex", "LaTeX"),
-        document("epub", "EPUB"),
-        document("ipynb", "Jupyter"),
-        document("json", "Pandoc JSON"),
-        document("docbook", "DocBook"),
-        document("mediawiki", "MediaWiki"),
-        document("textile", "Textile"),
-        document("asciidoc", "AsciiDoc"),
-        document("man", "Man"),
-        document("opml", "OPML"),
-        document("native", "Pandoc Native"),
-        document_read_only("bibtex", "BibTeX"),
-        document_read_only("csv", "CSV"),
-        document_write_only("pptx", "PowerPoint"),
+        // Documentos de Office (LibreOffice o Microsoft Office)
+        document_office("docx", "Word"),
+        document_office("doc", "Word 97-2003"),
+        document_office("odt", "OpenDocument"),
+        document_office("rtf", "RTF"),
+        document_office("txt", "Texto plano"),
+        document_office("html", "HTML"),
+        document_office("xlsx", "Excel"),
+        document_office("xls", "Excel 97-2003"),
+        document_office("ods", "Hoja OpenDocument"),
+        document_office("csv", "CSV"),
+        document_office("pptx", "PowerPoint"),
+        document_office("ppt", "PowerPoint 97-2003"),
+        document_office("odp", "Presentación OpenDocument"),
+        document_pdf(),
+        // Documentos de marcado (Pandoc)
+        document_pandoc("md", "Markdown"),
+        document_pandoc("rst", "reStructuredText"),
+        document_pandoc("org", "Org"),
+        document_pandoc("tex", "LaTeX"),
+        document_pandoc("epub", "EPUB"),
+        document_pandoc("ipynb", "Jupyter"),
+        document_pandoc("json", "Pandoc JSON"),
+        document_pandoc("docbook", "DocBook"),
+        document_pandoc("mediawiki", "MediaWiki"),
+        document_pandoc("textile", "Textile"),
+        document_pandoc("asciidoc", "AsciiDoc"),
+        document_pandoc("man", "Man"),
+        document_pandoc("opml", "OPML"),
+        document_pandoc("native", "Pandoc Native"),
+        document_pandoc_read_only("bibtex", "BibTeX"),
     ]
 }
 
@@ -279,6 +312,128 @@ pub fn format_for_path(path: &Path) -> Option<FormatDef> {
         .and_then(find_by_extension)
 }
 
+/// Familia de un documento. `None` si el formato no es documental.
+pub fn doc_family(id: &str) -> Option<DocFamily> {
+    match id {
+        "docx" | "doc" | "odt" | "rtf" | "txt" | "html" => Some(DocFamily::Word),
+        "xlsx" | "xls" | "ods" | "csv" => Some(DocFamily::Sheet),
+        "pptx" | "ppt" | "odp" => Some(DocFamily::Slide),
+        "md" | "rst" | "org" | "tex" | "epub" | "ipynb" | "json" | "docbook"
+        | "mediawiki" | "textile" | "asciidoc" | "man" | "opml" | "native" | "bibtex" => {
+            Some(DocFamily::Markup)
+        }
+        _ => None,
+    }
+}
+
+/// Formatos que Pandoc puede leer.
+pub fn pandoc_reads(id: &str) -> bool {
+    matches!(
+        id,
+        "md" | "rst"
+            | "org"
+            | "tex"
+            | "epub"
+            | "ipynb"
+            | "json"
+            | "docbook"
+            | "mediawiki"
+            | "textile"
+            | "asciidoc"
+            | "man"
+            | "opml"
+            | "native"
+            | "bibtex"
+            | "docx"
+            | "odt"
+            | "rtf"
+            | "txt"
+            | "html"
+    )
+}
+
+/// Formatos que Pandoc puede escribir.
+pub fn pandoc_writes(id: &str) -> bool {
+    matches!(
+        id,
+        "md" | "rst"
+            | "org"
+            | "tex"
+            | "epub"
+            | "ipynb"
+            | "json"
+            | "docbook"
+            | "mediawiki"
+            | "textile"
+            | "asciidoc"
+            | "man"
+            | "opml"
+            | "native"
+            | "docx"
+            | "odt"
+            | "rtf"
+            | "txt"
+            | "html"
+            | "pptx"
+    )
+}
+
+/// Microsoft Office guarda HTML con una carpeta de recursos asociada, algo
+/// que no encaja con la salida de un solo archivo de ConvertAll. Para HTML se
+/// usa LibreOffice o Pandoc.
+pub fn msoffice_native_target(id: &str) -> bool {
+    matches!(
+        id,
+        "docx"
+            | "doc"
+            | "odt"
+            | "rtf"
+            | "txt"
+            | "xlsx"
+            | "xls"
+            | "ods"
+            | "csv"
+            | "pptx"
+            | "ppt"
+            | "odp"
+            | "pdf"
+    )
+}
+
+fn is_office_target(id: &str) -> bool {
+    matches!(
+        id,
+        "docx"
+            | "doc"
+            | "odt"
+            | "rtf"
+            | "txt"
+            | "html"
+            | "xlsx"
+            | "xls"
+            | "ods"
+            | "csv"
+            | "pptx"
+            | "ppt"
+            | "odp"
+            | "pdf"
+    )
+}
+
+const WORD_TARGETS: &[&str] = &[
+    "pdf", "docx", "doc", "odt", "rtf", "txt", "html", "md", "rst", "org", "tex", "epub",
+    "docbook", "mediawiki", "textile", "asciidoc", "man", "opml",
+];
+
+const SHEET_TARGETS: &[&str] = &["pdf", "xlsx", "xls", "ods", "csv"];
+
+const SLIDE_TARGETS: &[&str] = &["pdf", "pptx", "ppt", "odp"];
+
+const MARKUP_TARGETS: &[&str] = &[
+    "docx", "odt", "rtf", "txt", "html", "md", "rst", "org", "tex", "epub", "ipynb", "json",
+    "docbook", "mediawiki", "textile", "asciidoc", "man", "opml", "native", "pptx",
+];
+
 pub fn targets_for(category: Category) -> Vec<FormatDef> {
     catalog()
         .into_iter()
@@ -301,24 +456,82 @@ pub fn targets_for(category: Category) -> Vec<FormatDef> {
         .collect()
 }
 
-pub fn is_target_allowed(category: Category, target_id: &str) -> bool {
-    targets_for(category)
+/// Destinos válidos para una entrada concreta.
+pub fn targets_for_input(input_id: &str) -> Vec<FormatDef> {
+    let Some(input) = find_by_id(input_id) else {
+        return Vec::new();
+    };
+
+    if input.category != Category::Document {
+        return targets_for(input.category);
+    }
+
+    let (ids, exclude_self): (&[&str], bool) = match doc_family(&input.id) {
+        Some(DocFamily::Word) => (WORD_TARGETS, true),
+        Some(DocFamily::Sheet) => (SHEET_TARGETS, true),
+        Some(DocFamily::Slide) => (SLIDE_TARGETS, true),
+        Some(DocFamily::Markup) => (MARKUP_TARGETS, false),
+        None => return Vec::new(),
+    };
+
+    ids.iter()
+        .filter(|id| !(exclude_self && **id == input.id))
+        .filter_map(|id| find_by_id(id))
+        .collect()
+}
+
+pub fn is_target_allowed(input_id: &str, target_id: &str) -> bool {
+    targets_for_input(input_id)
         .iter()
         .any(|format| format.id == target_id)
 }
 
+/// Motor que debe usarse para convertir una entrada en un destino.
+pub fn route(input_id: &str, target_id: &str) -> EngineKind {
+    let category = find_by_id(input_id)
+        .map(|format| format.category)
+        .unwrap_or(Category::Unknown);
+
+    match category {
+        Category::Image => EngineKind::Image,
+        Category::Audio | Category::Video => EngineKind::Ffmpeg,
+        Category::Document => {
+            if target_id == "pdf" {
+                return EngineKind::Office;
+            }
+
+            match doc_family(input_id) {
+                Some(DocFamily::Word) | Some(DocFamily::Sheet) | Some(DocFamily::Slide) => {
+                    if is_office_target(target_id) {
+                        EngineKind::Office
+                    } else {
+                        EngineKind::Pandoc
+                    }
+                }
+                _ => EngineKind::Pandoc,
+            }
+        }
+        Category::Unknown => EngineKind::Pandoc,
+    }
+}
+
 pub fn suggested_target(category: Category, input_id: &str) -> String {
-    let candidates: &[&str] = match category {
-        Category::Image => &["jpg", "png", "webp"],
-        Category::Audio => &["mp3", "wav", "flac"],
-        Category::Video => &["mp4", "mkv", "webm"],
-        Category::Document => &["docx", "html", "md", "txt"],
-        Category::Unknown => &[],
+    let (candidates, skip_self): (&[&str], bool) = match category {
+        Category::Image => (&["jpg", "png", "webp"], true),
+        Category::Audio => (&["mp3", "wav", "flac"], true),
+        Category::Video => (&["mp4", "mkv", "webm"], true),
+        Category::Document => match doc_family(input_id) {
+            Some(DocFamily::Word) => (&["pdf", "docx", "odt", "html", "txt"], true),
+            Some(DocFamily::Sheet) => (&["xlsx", "ods", "csv", "pdf"], true),
+            Some(DocFamily::Slide) => (&["pptx", "odp", "pdf"], true),
+            _ => (&["docx", "html", "md", "txt"], true),
+        },
+        Category::Unknown => (&[], true),
     };
 
     candidates
         .iter()
-        .find(|candidate| **candidate != input_id)
+        .find(|candidate| !skip_self || **candidate != input_id)
         .or_else(|| candidates.first())
         .copied()
         .unwrap_or("")
@@ -360,10 +573,85 @@ mod tests {
     }
 
     #[test]
-    fn document_targets_do_not_include_pdf_yet() {
-        let targets = targets_for(Category::Document);
-        assert!(!targets.iter().any(|format| format.id == "pdf"));
-        assert!(targets.iter().any(|format| format.id == "docx"));
+    fn pdf_is_a_write_only_target() {
+        let pdf = find_by_id("pdf").expect("pdf debe existir");
+        assert!(!pdf.can_read);
+        assert!(pdf.can_write);
+        assert_eq!(route("docx", "pdf"), EngineKind::Office);
+        assert_eq!(route("xlsx", "pdf"), EngineKind::Office);
+        assert_eq!(route("pptx", "pdf"), EngineKind::Office);
+        assert!(!is_target_allowed("md", "pdf"));
+    }
+
+    #[test]
+    fn new_office_formats_are_available() {
+        for id in ["doc", "xlsx", "xls", "ods", "ppt", "odp"] {
+            let format = find_by_id(id).unwrap_or_else(|| panic!("{id} debe existir"));
+            assert!(format.can_read, "{id} debe poder leerse");
+            assert!(format.can_write, "{id} debe poder escribirse");
+            assert_eq!(format.category, Category::Document);
+        }
+
+        let pptx = find_by_id("pptx").expect("pptx");
+        assert!(pptx.can_read);
+        assert!(pptx.can_write);
+
+        let csv = find_by_id("csv").expect("csv");
+        assert!(csv.can_read);
+        assert!(csv.can_write);
+    }
+
+    #[test]
+    fn word_targets_are_family_specific() {
+        let targets = targets_for_input("docx");
+        let ids: Vec<&str> = targets.iter().map(|format| format.id.as_str()).collect();
+        assert!(ids.contains(&"pdf"));
+        assert!(ids.contains(&"odt"));
+        assert!(ids.contains(&"doc"));
+        assert!(ids.contains(&"html"));
+        assert!(ids.contains(&"md"));
+        assert!(!ids.contains(&"docx"));
+        assert!(!ids.contains(&"xlsx"));
+    }
+
+    #[test]
+    fn sheet_and_slide_targets_stay_in_their_family() {
+        let sheet: Vec<String> = targets_for_input("xlsx")
+            .into_iter()
+            .map(|format| format.id)
+            .collect();
+        assert!(sheet.contains(&"pdf".to_string()));
+        assert!(sheet.contains(&"ods".to_string()));
+        assert!(sheet.contains(&"csv".to_string()));
+        assert!(!sheet.contains(&"docx".to_string()));
+
+        let slide: Vec<String> = targets_for_input("pptx")
+            .into_iter()
+            .map(|format| format.id)
+            .collect();
+        assert!(slide.contains(&"pdf".to_string()));
+        assert!(slide.contains(&"odp".to_string()));
+        assert!(!slide.contains(&"docx".to_string()));
+    }
+
+    #[test]
+    fn markup_inputs_keep_pandoc_targets() {
+        let targets = targets_for_input("md");
+        let ids: Vec<&str> = targets.iter().map(|format| format.id.as_str()).collect();
+        assert!(ids.contains(&"docx"));
+        assert!(ids.contains(&"epub"));
+        assert!(ids.contains(&"pptx"));
+        assert!(!ids.contains(&"pdf"));
+        assert!(ids.contains(&"md"));
+    }
+
+    #[test]
+    fn routing_prefers_office_for_office_targets() {
+        assert_eq!(route("docx", "odt"), EngineKind::Office);
+        assert_eq!(route("xlsx", "csv"), EngineKind::Office);
+        assert_eq!(route("pptx", "odp"), EngineKind::Office);
+        assert_eq!(route("docx", "md"), EngineKind::Pandoc);
+        assert_eq!(route("md", "docx"), EngineKind::Pandoc);
     }
 
     #[test]
@@ -371,6 +659,10 @@ mod tests {
         assert_eq!(suggested_target(Category::Image, "jpg"), "png");
         assert_eq!(suggested_target(Category::Audio, "mp3"), "wav");
         assert_eq!(suggested_target(Category::Video, "mp4"), "mkv");
+        assert_eq!(suggested_target(Category::Document, "docx"), "pdf");
+        assert_eq!(suggested_target(Category::Document, "xlsx"), "ods");
+        assert_eq!(suggested_target(Category::Document, "pptx"), "odp");
+        assert_eq!(suggested_target(Category::Document, "md"), "docx");
     }
 
     #[test]
@@ -410,5 +702,17 @@ mod tests {
         let video_targets = targets_for(Category::Video);
         assert!(video_targets.iter().any(|format| format.id == "mp3"));
         assert!(video_targets.iter().any(|format| format.id == "gif"));
+    }
+
+    #[test]
+    fn pandoc_capabilities_match_the_router() {
+        assert!(pandoc_reads("docx"));
+        assert!(pandoc_writes("docx"));
+        assert!(!pandoc_reads("xlsx"));
+        assert!(!pandoc_writes("doc"));
+        assert!(!pandoc_writes("pdf"));
+        assert!(pandoc_writes("pptx"));
+        assert!(msoffice_native_target("pdf"));
+        assert!(!msoffice_native_target("html"));
     }
 }

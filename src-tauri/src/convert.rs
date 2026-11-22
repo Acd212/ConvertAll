@@ -1,5 +1,5 @@
 use crate::engines;
-use crate::formats::{self, Category};
+use crate::formats;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -65,38 +65,96 @@ fn emit_progress(app: &AppHandle, job_id: &str, progress: f64, stage: &str) {
     );
 }
 
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
+enum EngineChoice {
+    Ffmpeg,
+    Magick,
+    Vips,
+    Pandoc,
+    LibreOffice(engines::OfficeApp),
+    MsOffice(engines::OfficeApp),
+}
+
+impl EngineChoice {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Ffmpeg => engines::FFMPEG,
+            Self::Magick => engines::MAGICK,
+            Self::Vips => engines::VIPS,
+            Self::Pandoc => engines::PANDOC,
+            Self::LibreOffice(_) => engines::LIBREOFFICE,
+            Self::MsOffice(_) => engines::MSOFFICE,
+        }
+    }
+}
+
+fn office_app_for_family(family: formats::DocFamily) -> Option<engines::OfficeApp> {
+    match family {
+        formats::DocFamily::Word => Some(engines::OfficeApp::Word),
+        formats::DocFamily::Sheet => Some(engines::OfficeApp::Excel),
+        formats::DocFamily::Slide => Some(engines::OfficeApp::PowerPoint),
+        formats::DocFamily::Markup => None,
+    }
+}
+
 fn choose_engine(
     app: &AppHandle,
-    category: Category,
-    target_id: &str,
-) -> Result<&'static str, String> {
-    match category {
-        Category::Image => {
+    input: &formats::FormatDef,
+    target: &formats::FormatDef,
+) -> Result<EngineChoice, String> {
+    match formats::route(&input.id, &target.id) {
+        formats::EngineKind::Image => {
             if engines::available(app, engines::MAGICK) {
-                Ok(engines::MAGICK)
+                Ok(EngineChoice::Magick)
             } else if engines::available(app, engines::VIPS) {
-                Ok(engines::VIPS)
+                Ok(EngineChoice::Vips)
             } else {
                 Err("No hay un motor de imágenes disponible (ImageMagick o libvips).".to_string())
             }
         }
-        Category::Audio | Category::Video => {
+        formats::EngineKind::Ffmpeg => {
             if engines::available(app, engines::FFMPEG) {
-                Ok(engines::FFMPEG)
+                Ok(EngineChoice::Ffmpeg)
             } else {
                 Err("FFmpeg no está disponible.".to_string())
             }
         }
-        Category::Document => {
+        formats::EngineKind::Pandoc => {
             if engines::available(app, engines::PANDOC) {
-                Ok(engines::PANDOC)
+                Ok(EngineChoice::Pandoc)
             } else {
                 Err("Pandoc no está disponible. Instálalo o descárgalo en cache/tools.".to_string())
             }
         }
-        Category::Unknown => Err(format!(
-            "El formato de destino «{target_id}» no se puede usar con este archivo."
-        )),
+        formats::EngineKind::Office => {
+            let app_kind = formats::doc_family(&input.id)
+                .and_then(office_app_for_family)
+                .or_else(|| formats::doc_family(&target.id).and_then(office_app_for_family))
+                .unwrap_or(engines::OfficeApp::Word);
+
+            // Microsoft Office solo se usa para formatos nativos de un solo
+            // archivo. HTML se deja a LibreOffice o Pandoc.
+            #[cfg(windows)]
+            if formats::msoffice_native_target(&target.id)
+                && engines::msoffice_available_for(app, app_kind)
+            {
+                return Ok(EngineChoice::MsOffice(app_kind));
+            }
+
+            if engines::available(app, engines::LIBREOFFICE) {
+                return Ok(EngineChoice::LibreOffice(app_kind));
+            }
+
+            if engines::available(app, engines::PANDOC)
+                && formats::pandoc_reads(&input.id)
+                && formats::pandoc_writes(&target.id)
+            {
+                return Ok(EngineChoice::Pandoc);
+            }
+
+            Err("Para las conversiones de Office y para generar PDF hace falta LibreOffice. En Windows también sirve Microsoft Office. Instala uno de los dos y vuelve a intentarlo.".to_string())
+        }
     }
 }
 
@@ -417,6 +475,234 @@ fn build_pandoc(command: &mut Command, input: &Path, output: &Path, target_id: &
     }
 }
 
+fn file_url(path: &Path) -> String {
+    let text = path
+        .to_string_lossy()
+        .replace('\\', "/")
+        .replace('%', "%25")
+        .replace(' ', "%20")
+        .replace('#', "%23")
+        .replace('?', "%3F");
+
+    if text.starts_with("//") {
+        // Ruta UNC: file://servidor/recurso.
+        format!("file:{text}")
+    } else if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    }
+}
+
+fn libreoffice_filter(target_id: &str, app: engines::OfficeApp) -> String {
+    match target_id {
+        "pdf" => match app {
+            engines::OfficeApp::Word => "pdf:writer_pdf_Export",
+            engines::OfficeApp::Excel => "pdf:calc_pdf_Export",
+            engines::OfficeApp::PowerPoint => "pdf:impress_pdf_Export",
+        }
+        .to_string(),
+        "txt" => "txt:Text (encoded):UTF8".to_string(),
+        "csv" => "csv:Text - txt - csv (StarCalc):44,34,76,1".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn build_libreoffice(
+    command: &mut Command,
+    input: &Path,
+    outdir: &Path,
+    profile: &Path,
+    filter: &str,
+) {
+    command
+        .arg("--headless")
+        .arg("--norestore")
+        .arg("--nolockcheck")
+        .arg("--nodefault")
+        .arg("--nofirststartwizard")
+        .arg(format!("-env:UserInstallation={}", file_url(profile)))
+        .arg("--convert-to")
+        .arg(filter)
+        .arg("--outdir")
+        .arg(outdir)
+        .arg(input);
+}
+
+/// Busca el archivo que LibreOffice acaba de generar en su carpeta temporal.
+fn find_produced_file(directory: &Path, target_extension: &str) -> Option<PathBuf> {
+    std::fs::read_dir(directory)
+        .ok()?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.is_file()
+                && !path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.starts_with('.'))
+                    .unwrap_or(false)
+                && path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .map(|extension| extension.eq_ignore_ascii_case(target_extension))
+                    .unwrap_or(false)
+        })
+}
+
+fn ps_quote(path: &Path) -> String {
+    path.to_string_lossy().replace('\'', "''")
+}
+
+fn office_format_code(app: engines::OfficeApp, target_id: &str) -> Option<i32> {
+    match (app, target_id) {
+        (engines::OfficeApp::Word, "docx") => Some(16),
+        (engines::OfficeApp::Word, "doc") => Some(0),
+        (engines::OfficeApp::Word, "odt") => Some(23),
+        (engines::OfficeApp::Word, "rtf") => Some(6),
+        (engines::OfficeApp::Word, "txt") => Some(2),
+        (engines::OfficeApp::Excel, "xlsx") => Some(51),
+        (engines::OfficeApp::Excel, "xls") => Some(56),
+        (engines::OfficeApp::Excel, "ods") => Some(60),
+        (engines::OfficeApp::Excel, "csv") => Some(6),
+        (engines::OfficeApp::PowerPoint, "pptx") => Some(24),
+        (engines::OfficeApp::PowerPoint, "ppt") => Some(1),
+        (engines::OfficeApp::PowerPoint, "odp") => Some(35),
+        _ => None,
+    }
+}
+
+fn office_script(
+    app: engines::OfficeApp,
+    input: &Path,
+    output: &Path,
+    target_id: &str,
+) -> Result<String, String> {
+    let input = ps_quote(input);
+    let output = ps_quote(output);
+
+    let body = match app {
+        engines::OfficeApp::Word => {
+            let action = if target_id == "pdf" {
+                format!("$doc.ExportAsFixedFormat('{output}', 17)")
+            } else {
+                let code = office_format_code(app, target_id).ok_or_else(|| {
+                    format!("Microsoft Word no puede guardar en «{target_id}».")
+                })?;
+                format!("$doc.SaveAs2('{output}', {code})")
+            };
+
+            format!(
+                r#"$app = $null
+$doc = $null
+try {{
+  $app = New-Object -ComObject Word.Application
+  $app.Visible = $false
+  $app.DisplayAlerts = 0
+  $doc = $app.Documents.Open('{input}', $false, $true)
+  {action}
+  $doc.Close(0)
+  $app.Quit()
+}} catch {{
+  if ($doc -ne $null) {{ try {{ $doc.Close(0) }} catch {{}} }}
+  if ($app -ne $null) {{ try {{ $app.Quit() }} catch {{}} }}
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}}
+"#
+            )
+        }
+        engines::OfficeApp::Excel => {
+            let action = if target_id == "pdf" {
+                format!("$wb.ExportAsFixedFormat(0, '{output}')")
+            } else {
+                let code = office_format_code(app, target_id).ok_or_else(|| {
+                    format!("Microsoft Excel no puede guardar en «{target_id}».")
+                })?;
+                format!("$wb.SaveAs('{output}', {code})")
+            };
+
+            format!(
+                r#"$app = $null
+$wb = $null
+try {{
+  $app = New-Object -ComObject Excel.Application
+  $app.Visible = $false
+  $app.DisplayAlerts = $false
+  $wb = $app.Workbooks.Open('{input}', 0, $true)
+  {action}
+  $wb.Close($false)
+  $app.Quit()
+}} catch {{
+  if ($wb -ne $null) {{ try {{ $wb.Close($false) }} catch {{}} }}
+  if ($app -ne $null) {{ try {{ $app.Quit() }} catch {{}} }}
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}}
+"#
+            )
+        }
+        engines::OfficeApp::PowerPoint => {
+            let code = if target_id == "pdf" {
+                32
+            } else {
+                office_format_code(app, target_id).ok_or_else(|| {
+                    format!("Microsoft PowerPoint no puede guardar en «{target_id}».")
+                })?
+            };
+
+            format!(
+                r#"$app = $null
+$pres = $null
+try {{
+  $app = New-Object -ComObject PowerPoint.Application
+  $pres = $app.Presentations.Open('{input}', $true, $false, $false)
+  $pres.SaveAs('{output}', {code})
+  $pres.Close()
+  $app.Quit()
+}} catch {{
+  if ($pres -ne $null) {{ try {{ $pres.Close() }} catch {{}} }}
+  if ($app -ne $null) {{ try {{ $app.Quit() }} catch {{}} }}
+  [Console]::Error.WriteLine($_.Exception.Message)
+  exit 1
+}}
+"#
+            )
+        }
+    };
+
+    Ok(format!("$ErrorActionPreference = 'Stop'\n{body}"))
+}
+
+fn write_office_script(
+    directory: &Path,
+    input: &Path,
+    output: &Path,
+    app: engines::OfficeApp,
+    target_id: &str,
+) -> Result<PathBuf, String> {
+    let script = office_script(app, input, output, target_id)?;
+    let path = directory.join("convert.ps1");
+
+    // PowerShell 5.1 interpreta los .ps1 sin BOM como ANSI. El BOM UTF-8
+    // conserva las rutas con acentos.
+    let mut bytes = vec![0xEF, 0xBB, 0xBF];
+    bytes.extend_from_slice(script.as_bytes());
+    std::fs::write(&path, bytes)
+        .map_err(|error| format!("No se pudo preparar Microsoft Office: {error}"))?;
+
+    Ok(path)
+}
+
+/// Carpeta temporal de trabajo que se borra al salir, incluso si el motor falla.
+struct TempDir(PathBuf);
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 pub fn unique_output_path(path: &Path) -> PathBuf {
     if !path.exists() {
         return path.to_path_buf();
@@ -448,10 +734,7 @@ async fn probe_duration(app: &AppHandle, input: &Path) -> Option<f64> {
     let mut command = Command::new(ffprobe);
     engines::sanitize_tokio_command(&mut command);
     #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x08000000);
-    }
+    command.creation_flags(0x08000000);
     command
         .args([
             "-v",
@@ -491,7 +774,14 @@ pub async fn convert(
     let target = formats::find_by_id(&request.target_format)
         .ok_or_else(|| "El formato de salida no está soportado.".to_string())?;
 
-    if !formats::is_target_allowed(input_format.category, &target.id) {
+    if !input_format.can_read {
+        return Err(format!(
+            "«{}» todavía no se puede usar como archivo de entrada.",
+            input_format.label
+        ));
+    }
+
+    if !formats::is_target_allowed(&input_format.id, &target.id) {
         return Err(format!(
             "No se puede convertir «{}» a «{}».",
             input_format.label, target.label
@@ -500,9 +790,19 @@ pub async fn convert(
 
     validate_options(&target, &request)?;
 
-    let engine_id = choose_engine(app, input_format.category, &target.id)?;
-    let tool = engines::resolve(app, engine_id)
-        .ok_or_else(|| format!("No se encontró el motor «{engine_id}»."))?;
+    let choice = choose_engine(app, &input_format, &target)?;
+    let engine_id = choice.id();
+    let tool = match choice {
+        EngineChoice::LibreOffice(_) => engines::resolve(app, engines::LIBREOFFICE),
+        EngineChoice::MsOffice(_) => engines::resolve_powershell(app),
+        _ => engines::resolve(app, engine_id),
+    }
+    .ok_or_else(|| match choice {
+        EngineChoice::MsOffice(_) => {
+            "No se encontró PowerShell para automatizar Microsoft Office.".to_string()
+        }
+        _ => format!("No se encontró el motor «{engine_id}»."),
+    })?;
 
     let output_dir = if request.output_dir.trim().is_empty() {
         input
@@ -547,6 +847,15 @@ pub async fn convert(
     ));
     let _ = std::fs::remove_file(&temp_output);
 
+    // Carpeta de trabajo aislada para LibreOffice/PowerShell. Se borra al
+    // terminar, también en los caminos de error y cancelación.
+    let job_dir = output_dir.join(format!(".convertall-{suffix}.d"));
+    let _ = std::fs::remove_dir_all(&job_dir);
+    std::fs::create_dir_all(&job_dir)
+        .map_err(|error| format!("No se pudo crear la carpeta temporal: {error}"))?;
+    let job_dir = std::path::absolute(&job_dir).unwrap_or(job_dir);
+    let _job_guard = TempDir(job_dir.clone());
+
     let mut command = Command::new(&tool);
     command.kill_on_drop(true);
     command
@@ -555,18 +864,37 @@ pub async fn convert(
         .stderr(Stdio::piped());
     engines::configure_tokio_command(&mut command, engine_id, &tool);
 
-    let is_ffmpeg = engine_id == engines::FFMPEG;
+    let is_ffmpeg = matches!(choice, EngineChoice::Ffmpeg);
     let mut duration = None;
+    let mut libreoffice_output: Option<PathBuf> = None;
 
-    match engine_id {
-        engines::FFMPEG => {
+    match choice {
+        EngineChoice::Ffmpeg => {
             build_ffmpeg(&mut command, &input, &temp_output, &target.id, &request);
             duration = probe_duration(app, &input).await;
         }
-        engines::MAGICK => build_magick(&mut command, &input, &temp_output, &target.id, &request),
-        engines::VIPS => build_vips(&mut command, &input, &temp_output, &request),
-        engines::PANDOC => build_pandoc(&mut command, &input, &temp_output, &target.id),
-        _ => return Err("Motor de conversión desconocido.".to_string()),
+        EngineChoice::Magick => {
+            build_magick(&mut command, &input, &temp_output, &target.id, &request);
+        }
+        EngineChoice::Vips => build_vips(&mut command, &input, &temp_output, &request),
+        EngineChoice::Pandoc => build_pandoc(&mut command, &input, &temp_output, &target.id),
+        EngineChoice::LibreOffice(app_kind) => {
+            let filter = libreoffice_filter(&target.id, app_kind);
+            let profile = job_dir.join("profile");
+            build_libreoffice(&mut command, &input, &job_dir, &profile, &filter);
+            libreoffice_output = Some(job_dir.clone());
+        }
+        EngineChoice::MsOffice(app_kind) => {
+            let script =
+                write_office_script(&job_dir, &input, &temp_output, app_kind, &target.id)?;
+            command
+                .arg("-NoProfile")
+                .arg("-NonInteractive")
+                .arg("-ExecutionPolicy")
+                .arg("Bypass")
+                .arg("-File")
+                .arg(script);
+        }
     }
 
     emit_progress(app, &request.job_id, 0.0, "preparando");
@@ -584,10 +912,13 @@ pub async fn convert(
         .take()
         .ok_or_else(|| "No se pudo leer el error del motor.".to_string())?;
 
-    let mut progress_task = if is_ffmpeg {
+    let mut progress_task: Option<tokio::task::JoinHandle<()>> = None;
+    let mut stdout_task: Option<tokio::task::JoinHandle<String>> = None;
+
+    if is_ffmpeg {
         let app = app.clone();
         let job_id = request.job_id.clone();
-        Some(tokio::spawn(async move {
+        progress_task = Some(tokio::spawn(async move {
             let mut lines = BufReader::new(stdout).lines();
             let mut last_emit: Option<Instant> = None;
 
@@ -618,13 +949,15 @@ pub async fn convert(
                     }
                 }
             }
-        }))
+        }));
     } else {
-        Some(tokio::spawn(async move {
-            let mut sink = Vec::new();
-            let _ = BufReader::new(stdout).read_to_end(&mut sink).await;
-        }))
-    };
+        stdout_task = Some(tokio::spawn(async move {
+            let mut text = String::new();
+            let mut stdout = stdout;
+            let _ = stdout.read_to_string(&mut text).await;
+            text
+        }));
+    }
 
     let stderr_task = tokio::spawn(async move {
         let mut text = String::new();
@@ -645,6 +978,9 @@ pub async fn convert(
         if let Some(task) = progress_task.take() {
             let _ = task.await;
         }
+        if let Some(task) = stdout_task.take() {
+            let _ = task.await;
+        }
         if let Some(task) = stderr_task.take() {
             let _ = task.await;
         }
@@ -655,6 +991,12 @@ pub async fn convert(
     if let Some(task) = progress_task.take() {
         let _ = task.await;
     }
+
+    let stdout_text = if let Some(task) = stdout_task.take() {
+        task.await.unwrap_or_default()
+    } else {
+        String::new()
+    };
 
     let stderr_text = if let Some(task) = stderr_task.take() {
         task.await.unwrap_or_default()
@@ -671,13 +1013,38 @@ pub async fn convert(
     };
 
     if !status.success() {
-        let detail = stderr_text.trim();
+        let detail = [stderr_text.trim(), stdout_text.trim()]
+            .into_iter()
+            .filter(|text| !text.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
         let _ = std::fs::remove_file(&temp_output);
         return Err(if detail.is_empty() {
             "El motor terminó con un error desconocido.".to_string()
         } else {
             format!("El motor terminó con un error:\n{detail}")
         });
+    }
+
+    if let Some(directory) = libreoffice_output {
+        let Some(produced) = find_produced_file(&directory, &target.extension) else {
+            let detail = [stderr_text.trim(), stdout_text.trim()]
+                .into_iter()
+                .filter(|text| !text.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let _ = std::fs::remove_file(&temp_output);
+            return Err(if detail.is_empty() {
+                "LibreOffice no generó el archivo de salida.".to_string()
+            } else {
+                format!("LibreOffice no generó el archivo de salida:\n{detail}")
+            });
+        };
+
+        if let Err(error) = std::fs::rename(&produced, &temp_output) {
+            let _ = std::fs::remove_file(&produced);
+            return Err(format!("No se pudo mover la salida de LibreOffice: {error}"));
+        }
     }
 
     let metadata = match std::fs::metadata(&temp_output) {
@@ -859,5 +1226,125 @@ mod tests {
         assert!(vips_args
             .windows(2)
             .any(|pair| pair[0] == "--size" && pair[1] == "down"));
+    }
+
+    #[test]
+    fn builds_libreoffice_command_with_isolated_profile() {
+        let mut command = Command::new("soffice");
+        build_libreoffice(
+            &mut command,
+            Path::new("/tmp/documento.docx"),
+            Path::new("/tmp/trabajo"),
+            Path::new("/tmp/trabajo/perfil"),
+            "pdf:writer_pdf_Export",
+        );
+        let args = args_of(&command);
+        assert!(args.iter().any(|arg| arg == "--headless"));
+        assert!(args
+            .windows(2)
+            .any(|pair| pair[0] == "--convert-to" && pair[1] == "pdf:writer_pdf_Export"));
+        assert!(args.iter().any(|arg| arg == "--outdir"));
+        assert!(args
+            .iter()
+            .any(|arg| arg.starts_with("-env:UserInstallation=file://")));
+        assert_eq!(args.last().map(String::as_str), Some("/tmp/documento.docx"));
+    }
+
+    #[test]
+    fn maps_libreoffice_filters_and_office_codes() {
+        use engines::OfficeApp;
+        assert_eq!(libreoffice_filter("pdf", OfficeApp::Word), "pdf:writer_pdf_Export");
+        assert_eq!(
+            libreoffice_filter("pdf", OfficeApp::Excel),
+            "pdf:calc_pdf_Export"
+        );
+        assert_eq!(
+            libreoffice_filter("pdf", OfficeApp::PowerPoint),
+            "pdf:impress_pdf_Export"
+        );
+        assert_eq!(
+            libreoffice_filter("csv", OfficeApp::Excel),
+            "csv:Text - txt - csv (StarCalc):44,34,76,1"
+        );
+        assert_eq!(libreoffice_filter("docx", OfficeApp::Word), "docx");
+
+        assert_eq!(office_format_code(OfficeApp::Word, "docx"), Some(16));
+        assert_eq!(office_format_code(OfficeApp::Word, "odt"), Some(23));
+        assert_eq!(office_format_code(OfficeApp::Excel, "xlsx"), Some(51));
+        assert_eq!(office_format_code(OfficeApp::Excel, "ods"), Some(60));
+        assert_eq!(office_format_code(OfficeApp::PowerPoint, "odp"), Some(35));
+        assert_eq!(office_format_code(OfficeApp::Word, "pdf"), None);
+    }
+
+    #[test]
+    fn builds_office_scripts_with_escaped_paths() {
+        let script = office_script(
+            engines::OfficeApp::Word,
+            Path::new("C:\\documentos\\don't move.docx"),
+            Path::new("C:\\salida\\resultado.pdf"),
+            "pdf",
+        )
+        .expect("script de Word");
+        assert!(script.contains("don''t move.docx"));
+        assert!(script.contains("ExportAsFixedFormat"));
+        assert!(script.contains("New-Object -ComObject Word.Application"));
+        assert!(script.contains("exit 1"));
+
+        let sheet = office_script(
+            engines::OfficeApp::Excel,
+            Path::new("/tmp/hoja.xlsx"),
+            Path::new("/tmp/hoja.ods"),
+            "ods",
+        )
+        .expect("script de Excel");
+        assert!(sheet.contains("SaveAs"));
+        assert!(sheet.contains(", 60)"));
+
+        let slides = office_script(
+            engines::OfficeApp::PowerPoint,
+            Path::new("/tmp/presentacion.pptx"),
+            Path::new("/tmp/presentacion.pdf"),
+            "pdf",
+        )
+        .expect("script de PowerPoint");
+        assert!(slides.contains("Presentations.Open"));
+        assert!(slides.contains(", 32)"));
+    }
+
+    #[test]
+    fn file_urls_handle_unix_and_windows_paths() {
+        assert_eq!(
+            file_url(Path::new("/tmp/perfil")),
+            "file:///tmp/perfil"
+        );
+        assert_eq!(
+            file_url(Path::new("C:\\Users\\Alvaro\\perfil")),
+            "file:///C:/Users/Alvaro/perfil"
+        );
+        assert_eq!(
+            file_url(Path::new("/tmp/perfil con espacios")),
+            "file:///tmp/perfil%20con%20espacios"
+        );
+        assert_eq!(
+            file_url(Path::new("\\\\servidor\\recurso")),
+            "file://servidor/recurso"
+        );
+    }
+
+    #[test]
+    fn finds_the_file_produced_by_libreoffice() {
+        let directory =
+            std::env::temp_dir().join(format!("convertall-office-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).expect("crear directorio de prueba");
+        std::fs::write(directory.join(".~lock.documento.docx#"), b"lock").expect("lock");
+        std::fs::write(directory.join("documento.PDF"), b"pdf").expect("salida");
+
+        let found = find_produced_file(&directory, "pdf").expect("debe encontrar el PDF");
+        assert_eq!(
+            found.file_name().and_then(|value| value.to_str()),
+            Some("documento.PDF")
+        );
+
+        std::fs::remove_dir_all(&directory).ok();
     }
 }

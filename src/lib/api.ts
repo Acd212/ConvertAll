@@ -13,8 +13,11 @@ import type {
 export const api = {
   detectEngines: () => invoke<EngineInfo[]>("detect_engines"),
   getCatalog: () => invoke<FormatDef[]>("get_catalog"),
-  getTargets: (category: Category) =>
-    invoke<FormatDef[]>("get_targets", { category }),
+  getTargets: (category: Category, inputFormat?: string) =>
+    invoke<FormatDef[]>(
+      "get_targets",
+      inputFormat ? { category, inputFormat } : { category },
+    ),
   inspectFile: (path: string) => invoke<FileInfo>("inspect_file", { path }),
   convertFile: (request: ConvertRequest) =>
     invoke<ConvertResult>("convert_file", { request }),

@@ -11,6 +11,7 @@
     overwrite = $bindable(false),
     openAfter = $bindable(true),
     pandocMissing = false,
+    officeMissing = false,
     onPickOutput,
   }: {
     engines: EngineInfo[];
@@ -20,6 +21,7 @@
     overwrite?: boolean;
     openAfter?: boolean;
     pandocMissing?: boolean;
+    officeMissing?: boolean;
     onPickOutput: () => void;
   } = $props();
 
@@ -145,6 +147,21 @@
           o
           <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">sudo pacman -S pandoc</code>).
           En Windows viene incluido en el paquete portable.
+        </span>
+      </div>
+    {/if}
+
+    {#if officeMissing}
+      <div class="mt-3 flex gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 p-2.5 text-[10px] leading-relaxed text-ink">
+        <AlertTriangle size={14} class="mt-0.5 shrink-0 text-amber-500" strokeWidth={2} />
+        <span>
+          LibreOffice no está instalado, así que las conversiones de Office y
+          la generación de PDF no estarán disponibles. Instálalo desde
+          libreoffice.org (en Linux basta con
+          <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">libreoffice-writer</code>,
+          <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">libreoffice-calc</code> y
+          <code class="mx-1 rounded bg-panel-2 px-1 py-0.5 font-mono text-[10px]">libreoffice-impress</code>).
+          En Windows, si Microsoft Office está instalado, se usará automáticamente.
         </span>
       </div>
     {/if}

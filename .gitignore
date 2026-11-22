@@ -17,6 +17,7 @@ src-tauri/resources/windows/*
 
 # Contexto local (no se publica)
 CONTEXTO.md
+chat.md
 
 # Sistema y editores
 .DS_Store

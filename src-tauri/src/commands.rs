@@ -12,7 +12,78 @@ fn engine_is_available(app: &AppHandle, engine: &str) -> bool {
         "image" => {
             engines::available(app, engines::MAGICK) || engines::available(app, engines::VIPS)
         }
+        // Un formato de Office también puede leerse con Pandoc si este lo
+        // soporta; la comprobación exacta se hace por formato.
+        engines::OFFICE => {
+            engines::office_available(app) || engines::available(app, engines::PANDOC)
+        }
         other => engines::available(app, other),
+    }
+}
+
+fn format_engine_available(app: &AppHandle, format: &FormatDef) -> bool {
+    match format.engine.as_str() {
+        "office" => {
+            engines::office_available(app)
+                || (engines::available(app, engines::PANDOC)
+                    && formats::pandoc_reads(&format.id))
+        }
+        other => engine_is_available(app, other),
+    }
+}
+
+fn msoffice_available_for_input(app: &AppHandle, input_id: &str) -> bool {
+    #[cfg(windows)]
+    {
+        let app_kind = match formats::doc_family(input_id) {
+            Some(formats::DocFamily::Word) => Some(engines::OfficeApp::Word),
+            Some(formats::DocFamily::Sheet) => Some(engines::OfficeApp::Excel),
+            Some(formats::DocFamily::Slide) => Some(engines::OfficeApp::PowerPoint),
+            _ => None,
+        };
+        if let Some(app_kind) = app_kind {
+            return engines::msoffice_available_for(app, app_kind);
+        }
+    }
+    let _ = (app, input_id);
+    false
+}
+
+/// Comprueba si hay un motor real para una ruta entrada → destino.
+fn target_is_available(app: &AppHandle, input_id: &str, target_id: &str) -> bool {
+    match formats::route(input_id, target_id) {
+        formats::EngineKind::Image => {
+            engines::available(app, engines::MAGICK) || engines::available(app, engines::VIPS)
+        }
+        formats::EngineKind::Ffmpeg => engines::available(app, engines::FFMPEG),
+        formats::EngineKind::Pandoc => engines::available(app, engines::PANDOC),
+        formats::EngineKind::Office => {
+            // Microsoft Office no produce HTML de un solo archivo.
+            if target_id == "html" {
+                return engines::available(app, engines::LIBREOFFICE)
+                    || (engines::available(app, engines::PANDOC)
+                        && formats::pandoc_reads(input_id));
+            }
+
+            if target_id == "pdf" {
+                return engines::available(app, engines::LIBREOFFICE)
+                    || msoffice_available_for_input(app, input_id);
+            }
+
+            if engines::available(app, engines::LIBREOFFICE) {
+                return true;
+            }
+
+            if formats::msoffice_native_target(target_id)
+                && msoffice_available_for_input(app, input_id)
+            {
+                return true;
+            }
+
+            engines::available(app, engines::PANDOC)
+                && formats::pandoc_reads(input_id)
+                && formats::pandoc_writes(target_id)
+        }
     }
 }
 
@@ -27,20 +98,40 @@ pub fn get_catalog() -> Vec<FormatDef> {
 }
 
 #[tauri::command]
-pub fn get_targets(app: AppHandle, category: String) -> Vec<FormatDef> {
+pub fn get_targets(
+    app: AppHandle,
+    category: String,
+    input_format: Option<String>,
+) -> Vec<FormatDef> {
     let category = Category::parse(&category);
     let capabilities = capabilities::load(&app, category);
 
-    formats::targets_for(category)
+    let input_format = input_format.filter(|value| !value.trim().is_empty());
+    let candidates = match input_format.as_deref() {
+        Some(input) => formats::targets_for_input(input),
+        None => formats::targets_for(category),
+    };
+
+    candidates
         .into_iter()
         .filter(|format| {
-            let engine_ok = if category == Category::Video && format.id == "gif" {
-                engines::available(&app, engines::FFMPEG)
-            } else {
-                engine_is_available(&app, &format.engine)
+            let engine_ok = match input_format.as_deref() {
+                Some(input) => target_is_available(&app, input, &format.id),
+                None if category == Category::Video && format.id == "gif" => {
+                    engines::available(&app, engines::FFMPEG)
+                }
+                None => format_engine_available(&app, format),
             };
 
-            engine_ok && capabilities.supports(&format.id)
+            // Las capacidades de Pandoc solo limitan los destinos que Pandoc
+            // va a escribir. Los de Office los resuelve LibreOffice u Office.
+            let capabilities_ok = if format.engine == "office" {
+                true
+            } else {
+                capabilities.supports(&format.id)
+            };
+
+            engine_ok && capabilities_ok
         })
         .collect()
 }
@@ -62,13 +153,29 @@ pub fn inspect_file(app: AppHandle, path: String) -> Result<FileInfo, String> {
         .to_ascii_lowercase();
 
     let format = formats::find_by_extension(&extension);
-    let (category, format_id, engine) = match &format {
+
+    if let Some(format) = &format {
+        if !format.can_read {
+            return Err(format!(
+                "«{}» todavía no se puede usar como archivo de entrada.",
+                format.label
+            ));
+        }
+    }
+
+    let (category, format_id, engine, engine_available) = match &format {
         Some(format) => (
             format.category,
             format.id.clone(),
             format.engine.clone(),
+            format_engine_available(&app, format),
         ),
-        None => (Category::Unknown, extension.clone(), String::new()),
+        None => (
+            Category::Unknown,
+            extension.clone(),
+            String::new(),
+            false,
+        ),
     };
 
     let name = path
@@ -84,8 +191,8 @@ pub fn inspect_file(app: AppHandle, path: String) -> Result<FileInfo, String> {
         size: metadata.len(),
         category,
         format_id: format_id.clone(),
-        engine: engine.clone(),
-        engine_available: !engine.is_empty() && engine_is_available(&app, &engine),
+        engine,
+        engine_available,
         suggested_target: formats::suggested_target(category, &format_id),
     })
 }

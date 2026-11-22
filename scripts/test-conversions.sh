@@ -207,6 +207,14 @@ else
 fi
 
 echo
+if command -v soffice >/dev/null 2>&1 || command -v libreoffice >/dev/null 2>&1; then
+  "$ROOT/scripts/test-office.sh" || fail=$((fail + 1))
+else
+  echo "== Office/PDF (LibreOffice) =="
+  echo "  (omitido: LibreOffice no está instalado)"
+fi
+
+echo
 echo "== Resultado =="
 echo "  correctos: $pass"
 echo "  fallidos:  $fail"

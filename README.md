@@ -27,7 +27,7 @@ Verificado en Linux y Windows:
 - Paquete portable de Windows (`.zip`) con FFmpeg, Pandoc e ImageMagick incluidos.
 - Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
 - La app arranca y detecta FFmpeg, ImageMagick, libvips, Pandoc, LibreOffice y Microsoft Office (Windows).
-- El CI de Linux instala LibreOffice y ejecuta `scripts/test-office.sh` (DOCX/DOC/ODT/RTF/TXT/HTML, CSV/XLSX/XLS/ODS, PPTX/PPT/ODP y PDF).
+- El CI de Linux instala LibreOffice y ejecuta `scripts/test-office.sh`: 23/23 conversiones correctas (DOCX/DOC/ODT/RTF/TXT/HTML, CSV/XLSX/XLS/ODS, PPTX/PPT/ODP y PDF).
 
 ### Ajustes por archivo
 

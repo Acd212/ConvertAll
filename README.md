@@ -1,8 +1,8 @@
 # ConvertAll
 
-Conversor de archivos **local** para Linux y Windows. Sin subidas, sin cuentas y sin telemetría.
+Conversor de archivos **local** para Linux y Windows. Sin subidas, sin cuentas, 100% local.
 
-Usa motores nativos en lugar de WebAssembly:
+Usa motores nativos:
 
 - **FFmpeg** para audio y vídeo.
 - **ImageMagick** y **libvips** para imágenes.
@@ -46,9 +46,9 @@ Cada archivo muestra solo las opciones válidas para su formato de destino:
 ### Office y PDF
 
 - **Entradas:** DOCX, DOC, ODT, RTF, TXT, HTML, XLSX, XLS, ODS, CSV, PPTX, PPT y ODP.
-- **Salidas:** las mismas familias, más PDF.
+- **Salidas:** las mismas, más PDF.
 - **PDF es solo salida.** La importación de PDF de LibreOffice produce un dibujo, no un documento editable fiable.
-- Cada archivo muestra únicamente los destinos válidos para su familia: Word, hoja de cálculo o presentación.
+- Cada archivo muestra únicamente los destinos válidos: Word, hoja de cálculo o presentación.
 - **Linux:** se usa el LibreOffice del sistema (`soffice` o `libreoffice`). No se empaqueta.
 - **Windows:** se detecta Microsoft Office en el registro y en las rutas habituales. Si Word, Excel o PowerPoint están instalados, se usan para su familia; si no, se recurre a LibreOffice. Tampoco se empaqueta Office.
 - Si no hay ninguno de los dos, la app sigue funcionando: solo se ocultan los destinos de Office/PDF y se muestra un aviso en «Motores».
@@ -67,7 +67,7 @@ ConvertAll puede exportar documentos de Office, texto e imágenes a PDF, pero **
 La importación de PDF en LibreOffice (el motor que usa ConvertAll para Office) trata el PDF como un dibujo o objeto gráfico, no como un documento con texto, tablas, celdas o diapositivas editables. El resultado no sería fiable: perderías formato, tablas, posiciones y no podrías editar el contenido como esperas en un archivo de Office.
 
 **Alternativa**
-Si necesitas convertir un PDF a un documento Office editable con fidelidad, tendrías que usar herramientas externas (por ejemplo, Adobe Acrobat o conversores especializados) antes de traer el archivo a ConvertAll. Esta limitación se mantiene intencionada para que la app siga siendo **100 % local, ligera y sin dependencias pesadas**.
+Si necesitas convertir un PDF a un documento Office editable con fidelidad, tendrías que usar herramientas externas (por ejemplo, JOPDF o PDFCraft) antes de traer el archivo a ConvertAll. Esta limitación se mantiene intencionada para que la app siga siendo **100 % local, ligera y sin dependencias pesadas**.
 
 Exportar **a** PDF desde otros formatos sí funciona normalmente.
 

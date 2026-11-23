@@ -25,7 +25,6 @@
   import type { QueueItem, QueueOptionPatch } from "./lib/queue";
   import { formatSize, categoryLabel } from "./lib/format";
   import Logo from "./lib/components/Logo.svelte";
-  import EngineChips from "./lib/components/EngineChips.svelte";
   import DropZone from "./lib/components/DropZone.svelte";
   import QueueItemCard from "./lib/components/QueueItem.svelte";
   import SettingsPanel from "./lib/components/SettingsPanel.svelte";
@@ -556,9 +555,6 @@
       </div>
 
       <div class="ml-auto flex items-center gap-2">
-        <div class="hidden lg:block">
-          <EngineChips {engines} />
-        </div>
         <button
           type="button"
           onclick={refreshEngines}

@@ -11,9 +11,39 @@ New-Item -ItemType Directory -Force -Path $tools | Out-Null
 New-Item -ItemType Directory -Force -Path $licenses | Out-Null
 New-Item -ItemType Directory -Force -Path $temp | Out-Null
 
+function Assert-Sha256 {
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [Parameter(Mandatory)][string]$Expected,
+    [string]$Label = $Path
+  )
+
+  $expectedHash = $Expected.Trim().ToLowerInvariant()
+  if ($expectedHash.StartsWith("sha256:")) {
+    $expectedHash = $expectedHash.Substring(7)
+  }
+  if ($expectedHash -notmatch "^[0-9a-f]{64}$") {
+    throw "SHA-256 no válido para $Label`: $Expected"
+  }
+
+  $actualHash = (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($actualHash -ne $expectedHash) {
+    throw "SHA-256 no coincide para $Label`nEsperado: $expectedHash`nObtenido: $actualHash"
+  }
+
+  Write-Host "    SHA-256 correcto: $Label"
+}
+
 Write-Host "==> Descargando FFmpeg"
+$ffmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 $ffmpegZip = Join-Path $temp "ffmpeg.zip"
-Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $ffmpegZip
+Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip
+$ffmpegChecksumContent = (Invoke-WebRequest -Uri "$ffmpegUrl.sha256").Content
+if ($ffmpegChecksumContent -is [byte[]]) {
+  $ffmpegChecksumContent = [System.Text.Encoding]::UTF8.GetString($ffmpegChecksumContent)
+}
+$ffmpegChecksum = ($ffmpegChecksumContent.Trim() -split "\s+")[0]
+Assert-Sha256 -Path $ffmpegZip -Expected $ffmpegChecksum -Label "FFmpeg"
 Expand-Archive -Path $ffmpegZip -DestinationPath (Join-Path $temp "ffmpeg") -Force
 $ffmpegExe = Get-ChildItem -Path (Join-Path $temp "ffmpeg") -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
 $ffprobeExe = Get-ChildItem -Path (Join-Path $temp "ffmpeg") -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
@@ -34,6 +64,10 @@ $asset = $release.assets | Where-Object { $_.name -match "windows-x86_64\.zip$" 
 if (-not $asset) { throw "No se encontró el paquete Windows de Pandoc" }
 $pandocZip = Join-Path $temp "pandoc.zip"
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $pandocZip
+if (-not $asset.digest) {
+  throw "GitHub no publica el SHA-256 del paquete de Pandoc $($release.tag_name)"
+}
+Assert-Sha256 -Path $pandocZip -Expected $asset.digest -Label "Pandoc $($release.tag_name)"
 Expand-Archive -Path $pandocZip -DestinationPath (Join-Path $temp "pandoc") -Force
 $pandocExe = Get-ChildItem -Path (Join-Path $temp "pandoc") -Filter "pandoc.exe" -Recurse | Select-Object -First 1
 if (-not $pandocExe) { throw "No se encontró pandoc.exe" }
@@ -53,6 +87,10 @@ $magickAsset = $magickRelease.assets | Where-Object { $_.name -match "-portable-
 if (-not $magickAsset) { throw "No se encontró el paquete portable de ImageMagick" }
 $magickArchive = Join-Path $temp "magick.7z"
 Invoke-WebRequest -Uri $magickAsset.browser_download_url -OutFile $magickArchive
+if (-not $magickAsset.digest) {
+  throw "GitHub no publica el SHA-256 del paquete de ImageMagick $($magickRelease.tag_name)"
+}
+Assert-Sha256 -Path $magickArchive -Expected $magickAsset.digest -Label "ImageMagick $($magickRelease.tag_name)"
 
 $sevenZip = Join-Path $env:ProgramFiles "7-Zip/7z.exe"
 if (-not (Test-Path $sevenZip)) { $sevenZip = "7z" }

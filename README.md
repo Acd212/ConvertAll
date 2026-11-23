@@ -24,10 +24,16 @@ Verificado en Linux y Windows:
 - 82 conversiones reales correctas en Linux (imagen, audio, vídeo y documentos).
 - 4 archivos convertidos desde la GUI y desde el AppImage con resolución, tamaño y bitrate (PNG→JPG, WAV→MP3, MP4→MKV, MD→DOCX).
 - El AppImage aísla los motores de sus propias bibliotecas para que libvips e ImageMagick usen las del sistema.
-- Paquete portable de Windows (`.zip`) con FFmpeg, Pandoc e ImageMagick incluidos.
+- Paquete portable de Windows (`.7z`) con FFmpeg, Pandoc e ImageMagick incluidos.
 - Motores de Windows probados bajo Wine: 13/13 conversiones correctas.
 - La app arranca y detecta FFmpeg, ImageMagick, libvips, Pandoc, LibreOffice y Microsoft Office (Windows).
 - El CI de Linux instala LibreOffice y ejecuta `scripts/test-office.sh`: 23/23 conversiones correctas (DOCX/DOC/ODT/RTF/TXT/HTML, CSV/XLSX/XLS/ODS, PPTX/PPT/ODP y PDF).
+
+### Seguridad
+
+- CSP estricta en producción: scripts, estilos, imágenes y conexiones limitados a la propia app y al IPC de Tauri.
+- Los motores descargados para el build de Windows se verifican con SHA-256 contra el checksum publicado por su origen.
+- Sin telemetría, sin subidas y sin red en tiempo de ejecución.
 
 ### Ajustes por archivo
 
@@ -69,7 +75,7 @@ Exportar **a** PDF desde otros formatos sí funciona normalmente.
 
 A partir de **v0.1.2** se mantiene una sola release con la última versión: [Releases](https://github.com/Acd212/ConvertAll/releases/latest).
 
-- Windows: `ConvertAll_x.y.z_x64-portable.zip`, sin instalador. Descomprime y ejecuta `ConvertAll.exe`.
+- Windows: `ConvertAll_x.y.z_x64-portable.7z`, sin instalador. Descomprime, abre la carpeta `ConvertAll` y ejecuta `ConvertAll.exe`. Windows 11 abre `.7z` de forma nativa; en Windows 10 necesitas 7-Zip u otro descompresor compatible.
 - Linux: `ConvertAll_x.y.z_amd64.AppImage`.
 
 ### Instalar LibreOffice

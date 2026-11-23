@@ -107,19 +107,30 @@ jobs:
 
           No requiere instalación.
 
-          1. Descomprime este ZIP en una carpeta.
+          1. Descomprime este archivo .7z y abre la carpeta ConvertAll.
           2. Ejecuta ConvertAll.exe.
           3. No muevas la carpeta tools: contiene FFmpeg, Pandoc e ImageMagick.
 
           Puedes crear un acceso directo a ConvertAll.exe.
           WebView2 es necesario (incluido en Windows 11 y en la mayoría de Windows 10).
           Si falta: https://developer.microsoft.com/microsoft-edge/webview2/
+
+          Windows 11 abre .7z de forma nativa. En Windows 10 necesitas 7-Zip
+          (https://www.7-zip.org/) u otro descompresor compatible.
           "@ | Set-Content -Path "$stage/LEEME.txt" -Encoding UTF8
 
-          Compress-Archive -Path "$stage/*" -DestinationPath "cache/portable/ConvertAll_${version}_x64-portable.zip" -Force
+          $sevenZip = Join-Path $env:ProgramFiles "7-Zip/7z.exe"
+          if (-not (Test-Path $sevenZip)) { $sevenZip = "7z" }
+          Push-Location "cache/portable"
+          try {
+            & $sevenZip a -t7z -mx=9 "ConvertAll_${version}_x64-portable.7z" "ConvertAll" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "No se pudo crear el paquete .7z" }
+          } finally {
+            Pop-Location
+          }
 
       - uses: actions/upload-artifact@v4
         with:
           name: convertall-windows
-          path: cache/portable/*.zip
+          path: cache/portable/*.7z
           if-no-files-found: error
